@@ -53,7 +53,7 @@ impl ActivityController {
             date: time, 
             athlete_name: Some(athlete_name),
             resource_state: club_activity.resource_state,
-            name: club_activity.name.clone(), // Clone the String if needed
+            name: club_activity.name.clone(),
             distance: club_activity.distance,
             moving_time: club_activity.moving_time,
             elapsed_time: club_activity.elapsed_time,

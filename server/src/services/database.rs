@@ -98,9 +98,8 @@ impl Database {
         for activity in activities {
             match self.insert_activity(activity).await {
                 Ok(_) => {}
-                Err(e) => {
+                Err(_e) => {
                     failed_insertions += 1;
-                    eprintln!("Failed to insert activity {:?}: {:?}", activity, e); // too noisy
                 }
             }
         }
