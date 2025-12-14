@@ -1,0 +1,129 @@
+.leaderboard {
+  width: 100%;
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 2rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.leaderboard-title {
+  font-size: 2rem;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 0.5rem;
+  color: #fc4c02;
+}
+
+.leaderboard-subtitle {
+  text-align: center;
+  color: #888;
+  margin-bottom: 2rem;
+  font-size: 0.9rem;
+}
+
+.no-data {
+  text-align: center;
+  color: #888;
+  padding: 2rem;
+  font-style: italic;
+}
+
+.leaderboard-table {
+  width: 100%;
+}
+
+.leaderboard-header {
+  display: grid;
+  grid-template-columns: 80px 1fr 150px 120px;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(252, 76, 2, 0.1);
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  font-weight: bold;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 150px 120px;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.leaderboard-row:hover {
+  transform: translateX(4px);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.leaderboard-row.podium {
+  background: rgba(252, 76, 2, 0.08);
+  border-left: 4px solid #fc4c02;
+}
+
+.leaderboard-row.podium:hover {
+  background: rgba(252, 76, 2, 0.12);
+}
+
+.rank-column {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.athlete-column {
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+}
+
+.distance-column {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-weight: 600;
+  color: #fc4c02;
+}
+
+.activities-column {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+  .leaderboard {
+    padding: 1rem;
+  }
+
+  .leaderboard-header,
+  .leaderboard-row {
+    grid-template-columns: 60px 1fr 100px;
+    gap: 0.5rem;
+    padding: 0.75rem;
+  }
+
+  .activities-column {
+    display: none;
+  }
+
+  .leaderboard-title {
+    font-size: 1.5rem;
+  }
+
+  .rank-column {
+    font-size: 1rem;
+  }
+}
