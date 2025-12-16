@@ -1,0 +1,23 @@
+# Ignore everything from .gitignore except Cargo.lock
+/target/
+**/*.rs.bk
+*.pdb
+.env
+.env.local
+.env.*.local
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+*.log
+Thumbs.db
+
+# Don't ignore Cargo.lock (needed for reproducible builds)
+!Cargo.lock
+
+# Additional gcloud ignores
+.git/
+.gcloudignore
+.gitignore
