@@ -964,7 +964,7 @@ gcloud run services update bullsharks-server \
 gcloud secrets versions access latest --secret=database-url
 
 # Test database connectivity from local machine
-psql "postgresql://postgres.nvuuwstlsszmtxnqrwol:sumxu3-nufdub-herteQ@aws-0-us-west-2.pooler.supabase.com:5432/postgres"
+psql "postgresql://postgres.nvuuwstlsszmtxnqrwol:[password]@aws-0-us-west-2.pooler.supabase.com:5432/postgres"
 
 # Update the secret if needed
 echo -n "new-database-url" | gcloud secrets versions add database-url --data-file=-
