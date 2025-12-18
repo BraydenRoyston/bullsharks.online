@@ -5,7 +5,7 @@ use chrono::Utc;
 use sqlx::{PgPool};
 use tokio_cron_scheduler::{JobScheduler, Job};
 
-use crate::{api::activities::{read_activities, populate_activities}, error::ApiError, services::{activity_controller::ActivityController, auth_controller::{AuthController, StravaConfig}, database::Database, strava_client::StravaClient}};
+use crate::{api::{activities::{read_activities, populate_activities}, health::health_check}, error::ApiError, services::{activity_controller::ActivityController, auth_controller::{AuthController, StravaConfig}, database::Database, strava_client::StravaClient}};
 
 pub fn get_strava_config() -> StravaConfig {
     return StravaConfig::from_env()
@@ -106,10 +106,6 @@ impl FromRef<AppState> for Arc<ActivityController> {
     fn from_ref(state: &AppState) -> Arc<ActivityController> {
         state.activity_controller.clone()
     }
-}
-
-async fn health_check() -> &'static str {
-    "OK"
 }
 
 fn create_app(state: AppState) -> Router {

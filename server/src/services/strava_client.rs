@@ -46,7 +46,13 @@ impl StravaClient {
             eprintln!("Error deserializing response body: {}", e);
             ApiError::ExternalAPIError(e.to_string())
         })?; 
-        
+
         Ok(club_activities)
+    }
+
+    pub async fn health_check(&self) -> Result<(), ApiError> {
+        // Verify we can get a valid auth token from Strava
+        self.auth_controller.get_valid_auth_token().await?;
+        Ok(())
     }
 }

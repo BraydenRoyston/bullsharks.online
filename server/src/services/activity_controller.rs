@@ -99,4 +99,9 @@ impl ActivityController {
         hasher.update(composite.as_bytes());
         Ok(format!("{:x}", hasher.finalize()))
     }
+
+    pub async fn health_check_strava(&self) -> Result<(), ApiError> {
+        // Attempt to verify we can get a valid Strava auth token
+        self.strava_client.health_check().await
+    }
 }

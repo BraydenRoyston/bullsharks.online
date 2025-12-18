@@ -144,4 +144,15 @@ impl Database {
         Ok(activities)
     }
     // MARK: Activities End
+
+    // MARK: Health Check
+    pub async fn health_check(&self) -> Result<(), ApiError> {
+        sqlx::query("SELECT 1")
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| ApiError::DatabaseError(format!("Health check failed: {}", e)))?;
+
+        Ok(())
+    }
+    // MARK: Health Check End
 }
