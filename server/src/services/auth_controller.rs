@@ -75,7 +75,10 @@ impl AuthController {
     }
 
     async fn refresh_token(&self, old_token: &StravaAuthToken) -> Result<StravaAuthToken, ApiError> {
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .map_err(|e| ApiError::ExternalAPIError(format!("Failed to build HTTP client: {}", e)))?;
         let response = client
             .post("https://www.strava.com/oauth/token")
             .form(&[

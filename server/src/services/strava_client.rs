@@ -16,7 +16,10 @@ impl StravaClient {
     pub async fn read_last_100_activities(&self) -> Result<Vec<ClubActivity>, ApiError> {
         let fresh_token = self.auth_controller.get_valid_auth_token().await?;
         let club_id = self.auth_controller.get_club_id();
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .map_err(|e| ApiError::ExternalAPIError(format!("Failed to build HTTP client: {}", e)))?;
         let response = client
         .get(format!("https://www.strava.com/api/v3/clubs/{}/activities", club_id))
         .query(&[
