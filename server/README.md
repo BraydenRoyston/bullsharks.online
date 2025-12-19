@@ -140,13 +140,27 @@ gcloud run services logs read bullsharks-server \
 Watch populate triggers as they happen (useful for verifying the scheduler after configuration changes):
 
 ```bash
-# Watch for populate triggers in real-time
-gcloud run services logs tail bullsharks-server \
+# Option 1: Using watch (refreshes every 5 seconds) - Recommended
+watch -n 5 'gcloud run services logs read bullsharks-server --region us-central1 --log-filter="textPayload=~\"Manual populate triggered\"" --limit 10'
+
+# Option 2: Using a while loop (polls every 10 seconds)
+while true; do
+  clear
+  echo "=== Latest Populate Triggers (updates every 10 seconds) ==="
+  gcloud run services logs read bullsharks-server \
+    --region us-central1 \
+    --log-filter='textPayload=~"Manual populate triggered"' \
+    --limit 10
+  sleep 10
+done
+
+# Option 3: Simple one-time check with grep
+gcloud run services logs read bullsharks-server \
   --region us-central1 \
-  --log-filter='textPayload=~"Manual populate triggered"'
+  --limit 200 | grep "Manual populate triggered"
 ```
 
-Press `Ctrl+C` to stop watching.
+Press `Ctrl+C` to stop watching (for Options 1 and 2).
 
 ### Test End-to-End
 
