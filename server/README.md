@@ -21,9 +21,9 @@ This README provides instructions for managing and monitoring your BullSharks St
 
 ### How Activity Syncing Works
 
-This server uses **Google Cloud Scheduler** to automatically sync Strava activities every hour:
+This server uses **Google Cloud Scheduler** to automatically sync Strava activities every 2 minutes:
 
-1. **Cloud Scheduler** triggers the `/populate` endpoint at the top of every hour (`:00`)
+1. **Cloud Scheduler** triggers the `/populate` endpoint every 2 minutes
 2. The endpoint validates a secret token for security
 3. If valid, the server fetches the last 100 activities from the Strava Club API
 4. Activities are inserted into the PostgreSQL database (duplicates are skipped)
@@ -108,15 +108,15 @@ gcloud scheduler jobs run populate-activities --location=us-central1
 **What to look for in the output:**
 
 - **State**: Should be `ENABLED`
-- **Schedule**: Should be `0 * * * *` (runs every hour at :00)
-- **Last Attempt Time**: Should show recent execution (within the last hour)
+- **Schedule**: Should be `*/2 * * * *` (runs every 2 minutes)
+- **Last Attempt Time**: Should show recent execution (within the last 2 minutes)
 - **Status Code**: Empty `{}` or `0` indicates success
 - **Target URI**: Should point to your `/populate` endpoint
 
 **Healthy Scheduler Example:**
 ```
 state: ENABLED
-schedule: 0 * * * *
+schedule: */2 * * * *
 lastAttemptTime: '2025-12-18T22:00:35.081463Z'
 status: {}
 ```
@@ -126,14 +126,27 @@ status: {}
 Check if the scheduler has been triggering syncs on schedule:
 
 ```bash
-# Check for populate triggers in the last 6 hours
+# Check for populate triggers in the last 30 minutes
 gcloud run services logs read bullsharks-server \
   --region us-central1 \
-  --log-filter='textPayload=~"Manual populate triggered" AND timestamp>="'$(date -u -v-6H '+%Y-%m-%dT%H:%M:%SZ')'"' \
+  --log-filter='textPayload=~"Manual populate triggered" AND timestamp>="'$(date -u -v-30M '+%Y-%m-%dT%H:%M:%SZ')'"' \
   --limit 20
 
-# Should show entries at the top of each hour (00:00, 01:00, 02:00, etc.)
+# Should show entries every 2 minutes
 ```
+
+### Monitor in Real-Time
+
+Watch populate triggers as they happen (useful for verifying the scheduler after configuration changes):
+
+```bash
+# Watch for populate triggers in real-time
+gcloud run services logs tail bullsharks-server \
+  --region us-central1 \
+  --log-filter='textPayload=~"Manual populate triggered"'
+```
+
+Press `Ctrl+C` to stop watching.
 
 ### Test End-to-End
 
