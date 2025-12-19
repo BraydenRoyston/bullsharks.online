@@ -7,6 +7,7 @@ This README provides instructions for managing and monitoring your BullSharks St
 ## Table of Contents
 - [Architecture Overview](#architecture-overview)
 - [Manual Activity Sync](#manual-activity-sync)
+- [Checking Scheduler Health](#checking-scheduler-health)
 - [Reading Logs](#reading-logs)
 - [Redeploying After Code Changes](#redeploying-after-code-changes)
 - [Restarting the Server](#restarting-the-server)
@@ -78,6 +79,80 @@ gcloud scheduler jobs describe populate-activities --location=us-central1
 gcloud scheduler jobs describe populate-activities \
   --location=us-central1 \
   --format='get(status.lastAttemptTime,status.code)'
+```
+
+---
+
+## Checking Scheduler Health
+
+Use these commands to verify that Google Cloud Scheduler is running properly and triggering your activity syncs.
+
+### Quick Health Check
+
+```bash
+# Check scheduler status
+gcloud scheduler jobs describe populate-activities --location=us-central1
+
+# Check recent populate logs
+gcloud run services logs read bullsharks-server \
+  --region us-central1 \
+  --log-filter='textPayload=~"Manual populate triggered"' \
+  --limit 10
+
+# Manually trigger for testing
+gcloud scheduler jobs run populate-activities --location=us-central1
+```
+
+### Understanding Scheduler Status
+
+**What to look for in the output:**
+
+- **State**: Should be `ENABLED`
+- **Schedule**: Should be `0 * * * *` (runs every hour at :00)
+- **Last Attempt Time**: Should show recent execution (within the last hour)
+- **Status Code**: Empty `{}` or `0` indicates success
+- **Target URI**: Should point to your `/populate` endpoint
+
+**Healthy Scheduler Example:**
+```
+state: ENABLED
+schedule: 0 * * * *
+lastAttemptTime: '2025-12-18T22:00:35.081463Z'
+status: {}
+```
+
+### Verify Automatic Syncs are Working
+
+Check if the scheduler has been triggering syncs on schedule:
+
+```bash
+# Check for populate triggers in the last 6 hours
+gcloud run services logs read bullsharks-server \
+  --region us-central1 \
+  --log-filter='textPayload=~"Manual populate triggered" AND timestamp>="'$(date -u -v-6H '+%Y-%m-%dT%H:%M:%SZ')'"' \
+  --limit 20
+
+# Should show entries at the top of each hour (00:00, 01:00, 02:00, etc.)
+```
+
+### Test End-to-End
+
+Manually trigger a sync and verify it completes successfully:
+
+```bash
+# 1. Trigger the job
+gcloud scheduler jobs run populate-activities --location=us-central1
+
+# 2. Wait a few seconds for it to run
+sleep 10
+
+# 3. Check the logs for success
+gcloud run services logs read bullsharks-server \
+  --region us-central1 \
+  --log-filter='textPayload=~"Populate new activities complete"' \
+  --limit 1
+
+# Should show: "Populate new activities complete."
 ```
 
 ---
