@@ -62,23 +62,29 @@ impl AuthController {
                   format!("No token found for user: {}. Please insert initial token.", user_id)
               ))?;
 
+        println!("Database token retrieved. Checking expiration status...");
         if db_token.is_expired() || db_token.expires_soon() {
-            println!("Token is expired. Refreshing via the Strava API...");
+            println!("Token is expired or expiring soon. Refreshing via the Strava API...");
             let new_token = self.refresh_token(&db_token).await?;
+            println!("Token refresh from Strava completed. Now storing to database...");
             self.store_token(new_token.clone()).await?;
-            println!("Token refresh successful.");
+            println!("Token refresh successful and stored.");
             return Ok(new_token.access_token);
         }
+
+        println!("Database token is still valid. Using it.");
         
         self.token_cache.insert(user_id.to_string(), db_token.clone());
         Ok(db_token.access_token)
     }
 
     async fn refresh_token(&self, old_token: &StravaAuthToken) -> Result<StravaAuthToken, ApiError> {
+        println!("[AUTH] refresh_token: Starting token refresh request to Strava API");
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(15))
             .build()
             .map_err(|e| ApiError::ExternalAPIError(format!("Failed to build HTTP client: {}", e)))?;
+        println!("[AUTH] refresh_token: Sending POST request to Strava OAuth endpoint");
         let response = client
             .post("https://www.strava.com/oauth/token")
             .form(&[
@@ -91,25 +97,32 @@ impl AuthController {
             .await
             .map_err(|e| ApiError::ExternalAPIError(format!("Strava API request failed: {}", e)))?;
 
+        println!("[AUTH] refresh_token: Received response from Strava, status: {}", response.status());
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            eprintln!("[AUTH] refresh_token: ERROR - Strava returned non-success status {}: {}", status, error_text);
             return Err(ApiError::ExternalAPIError(
                 format!("Strava token refresh failed ({}): {}", status, error_text)
             ));
         }
 
+        println!("[AUTH] refresh_token: Parsing Strava response JSON");
         let token_response: StravaTokenResponse = response
             .json()
             .await
             .map_err(|e| ApiError::ExternalAPIError(format!("Failed to parse Strava response: {}", e)))?;
 
+        println!("[AUTH] refresh_token: Successfully parsed new token from Strava");
         Ok(StravaAuthToken::new(old_token.id.clone(), token_response))
     }
 
     async fn store_token(&self, token: StravaAuthToken) -> Result<(), ApiError> {
+        println!("[AUTH] store_token: Inserting token into cache for user '{}'", token.id);
         self.token_cache.insert(token.id.clone(), token.clone());
+        println!("[AUTH] store_token: Token cached. Now upserting to database...");
         self.db.upsert_auth_token(&token).await?;
+        println!("[AUTH] store_token: Token successfully stored in both cache and database");
         Ok(())
     }
 }

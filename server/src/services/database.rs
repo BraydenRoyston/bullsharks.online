@@ -12,9 +12,10 @@ impl Database {
 
     // MARK: Auth Begins
     pub async fn upsert_auth_token(&self, token: &StravaAuthToken) -> Result<(),ApiError> {
+        println!("[DB] upsert_auth_token: Starting upsert for user '{}'", token.id);
         sqlx::query(
             r#"
-            INSERT INTO strava_auth_tokens 
+            INSERT INTO strava_auth_tokens
             (id, token_type, access_token, expires_at, expires_in, refresh_token)
             VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (id) DO UPDATE SET
@@ -36,10 +37,12 @@ impl Database {
         .await
         .map_err(|e| ApiError::DatabaseError(format!("Failed to upsert auth token: {}", e)))?;
 
+        println!("[DB] upsert_auth_token: Successfully completed upsert for user '{}'", token.id);
         Ok(())
     }
 
     pub async fn get_auth_token(&self, id: &str) -> Result<Option<StravaAuthToken>, ApiError> {
+        println!("[DB] get_auth_token: Querying database for user '{}'", id);
         let result = sqlx::query(
             r#"
             SELECT id, token_type, access_token, expires_at, expires_in, refresh_token
@@ -52,6 +55,7 @@ impl Database {
         .await
         .map_err(|e| ApiError::DatabaseError(format!("Failed to get auth token: {}", e)))?;
 
+        println!("[DB] get_auth_token: Query completed for user '{}', found: {}", id, result.is_some());
         Ok(result.map(database_utils::map_row_to_token))
     }
     // MARK: Auth Tokens End
@@ -112,9 +116,10 @@ impl Database {
     pub async fn get_all_activities(&self) -> Result<Vec<BullSharkActivity>, ApiError> {
         use sqlx::Row;
 
+        println!("[DB] get_all_activities: Starting query for all activities");
         let rows = sqlx::query(
             r#"
-            SELECT id, date, resource_state, name, distance, moving_time, 
+            SELECT id, date, resource_state, name, distance, moving_time,
                     elapsed_time, total_elevation_gain, sport_type, workout_type, device_name, athlete_name
             FROM bullshark_activities
             ORDER BY date DESC
@@ -124,7 +129,7 @@ impl Database {
         .await
         .map_err(|e| ApiError::DatabaseError(format!("Failed to fetch activities: {}", e)))?;
 
-        let activities = rows.into_iter().map(|row| {
+        let activities: Vec<BullSharkActivity> = rows.into_iter().map(|row| {
             BullSharkActivity {
                 id: row.get("id"),
                 date: row.get("date"),
@@ -141,17 +146,20 @@ impl Database {
             }
         }).collect();
 
+        println!("[DB] get_all_activities: Query completed, returned {} activities", activities.len());
         Ok(activities)
     }
     // MARK: Activities End
 
     // MARK: Health Check
     pub async fn health_check(&self) -> Result<(), ApiError> {
+        println!("[DB] health_check: Starting database health check");
         sqlx::query("SELECT 1")
             .fetch_one(&self.pool)
             .await
             .map_err(|e| ApiError::DatabaseError(format!("Health check failed: {}", e)))?;
 
+        println!("[DB] health_check: Health check completed successfully");
         Ok(())
     }
     // MARK: Health Check End
