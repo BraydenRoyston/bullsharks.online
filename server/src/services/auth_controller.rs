@@ -48,31 +48,31 @@ impl AuthController {
     pub async fn get_valid_auth_token_for_user(&self, user_id: &str) -> Result<String, ApiError> {
         if let Some(cached_token) = self.token_cache.get(user_id) {
             if !cached_token.is_expired() {
-                println!("Using cached token for user {}", user_id.to_string());
+                println!("[AUTH] Using cached token for user {}", user_id.to_string());
                 return Ok(cached_token.access_token.to_string());
-            } else {
-                println!("Found expired token in cache. Evicting.");
-                self.token_cache.remove(user_id);
             }
+            drop(cached_token);
         }
 
-        println!("Cache miss. Checking database for fresh token");
+        // Remove any expired cached token
+        self.token_cache.remove(user_id);
+        println!("[AUTH] Cache miss or expired token. Checking database for fresh token");
         let db_token = self.db.get_auth_token(user_id).await?
               .ok_or_else(|| ApiError::AuthTokenError(
                   format!("No token found for user: {}. Please insert initial token.", user_id)
               ))?;
 
-        println!("Database token retrieved. Checking expiration status...");
+        println!("[AUTH] Database token retrieved. Checking expiration status...");
         if db_token.is_expired() || db_token.expires_soon() {
-            println!("Token is expired or expiring soon. Refreshing via the Strava API...");
+            println!("[AUTH] Token is expired or expiring soon. Refreshing via the Strava API...");
             let new_token = self.refresh_token(&db_token).await?;
-            println!("Token refresh from Strava completed. Now storing to database...");
+            println!("[AUTH] Token refresh from Strava completed. Now storing to database...");
             self.store_token(new_token.clone()).await?;
-            println!("Token refresh successful and stored.");
+            println!("[AUTH] Token refresh successful and stored.");
             return Ok(new_token.access_token);
         }
 
-        println!("Database token is still valid. Using it.");
+        println!("[AUTH] Database token is still valid. Using it.");
         
         self.token_cache.insert(user_id.to_string(), db_token.clone());
         Ok(db_token.access_token)
