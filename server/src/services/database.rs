@@ -161,6 +161,54 @@ impl Database {
         println!("[DB] get_all_activities: Query completed, returned {} activities", activities.len());
         Ok(activities)
     }
+
+    pub async fn get_activities_from_window(&self, start: DateTime<Utc>, end: DateTime<Utc>) -> Result<Vec<BullSharkActivity>, ApiError> {
+        use sqlx::Row;
+
+        println!("[DB] get_activities_from_window: Starting query for activities between {:?} and {:?}", start, end);
+        let rows = sqlx::query(
+            r#"
+            SELECT id, date, resource_state, name, distance, moving_time,
+                    elapsed_time, total_elevation_gain, sport_type, workout_type, device_name, athlete_name
+            FROM bullshark_activities
+            WHERE date >= $1 AND date <= $2
+            ORDER BY date DESC
+            "#
+        )
+        .bind(start)
+        .bind(end)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| ApiError::DatabaseError(format!("Failed to fetch activities from window: {}", e)))?;
+
+        let activities: Vec<BullSharkActivity> = rows.into_iter().map(|row| {
+            // Get timestamp from DB (stored as UTC)
+            let date_utc: DateTime<Utc> = row.get("date");
+
+            // Convert to Pacific timezone
+            let date_pacific_tz = Los_Angeles.from_utc_datetime(&date_utc.naive_utc());
+            // Convert to FixedOffset for serialization support
+            let date_pacific = date_pacific_tz.with_timezone(&date_pacific_tz.offset().fix());
+
+            BullSharkActivity {
+                id: row.get("id"),
+                date: date_pacific,
+                athlete_name: row.get("athlete_name"),
+                resource_state: row.get("resource_state"),
+                name: row.get("name"),
+                distance: row.get("distance"),
+                moving_time: row.get("moving_time"),
+                elapsed_time: row.get("elapsed_time"),
+                total_elevation_gain: row.get("total_elevation_gain"),
+                sport_type: row.get("sport_type"),
+                workout_type: row.get("workout_type"),
+                device_name: row.get("device_name"),
+            }
+        }).collect();
+
+        println!("[DB] get_activities_from_window: Query completed, returned {} activities", activities.len());
+        Ok(activities)
+    }
     // MARK: Activities End
 
 
