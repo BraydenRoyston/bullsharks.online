@@ -74,3 +74,48 @@ pub async fn get_activities_from_this_week(
     let activities = db.get_activities_from_window(start_utc, end_utc).await?;
     Ok(Json(activities))
 }
+
+pub async fn get_activities_from_this_month(
+    State(db): State<Arc<Database>>
+) -> Result<Json<Vec<BullSharkActivity>>, ApiError> {
+    // Get current time in Pacific timezone
+    let now_pacific = Los_Angeles.from_utc_datetime(&Utc::now().naive_utc());
+
+    // Calculate start of month (1st day at 00:00:00) in Pacific
+    let start_of_month_pacific = now_pacific
+        .date_naive()
+        .with_day(1)
+        .ok_or_else(|| ApiError::InternalConversionError("Invalid start of month date".to_string()))?
+        .and_hms_opt(0, 0, 0)
+        .unwrap();
+    let start_of_month_pacific = Los_Angeles.from_local_datetime(&start_of_month_pacific).single()
+        .ok_or_else(|| ApiError::InternalConversionError("Invalid start of month time".to_string()))?;
+
+    // Calculate end of month (last day at 23:59:59) in Pacific
+    // Get the first day of next month, then subtract 1 second to get end of current month
+    let next_month = if now_pacific.month() == 12 {
+        now_pacific.date_naive()
+            .with_year(now_pacific.year() + 1)
+            .and_then(|d| d.with_month(1))
+    } else {
+        now_pacific.date_naive()
+            .with_month(now_pacific.month() + 1)
+    }
+    .ok_or_else(|| ApiError::InternalConversionError("Invalid next month date".to_string()))?
+    .and_hms_opt(0, 0, 0)
+    .unwrap();
+
+    let end_of_month_pacific = Los_Angeles.from_local_datetime(&next_month).single()
+        .ok_or_else(|| ApiError::InternalConversionError("Invalid end of month time".to_string()))?
+        - Duration::seconds(1);
+
+    // Convert to UTC for database query
+    let start_utc = start_of_month_pacific.with_timezone(&Utc);
+    let end_utc = end_of_month_pacific.with_timezone(&Utc);
+
+    println!("[API] get_activities_from_this_month: Querying from {} to {}", start_utc, end_utc);
+
+    // Query database
+    let activities = db.get_activities_from_window(start_utc, end_utc).await?;
+    Ok(Json(activities))
+}

@@ -5,7 +5,7 @@ use chrono::Utc;
 use sqlx::{PgPool};
 use tokio_cron_scheduler::{JobScheduler, Job};
 
-use crate::{api::{activities::{read_activities, populate_activities, get_activities_from_this_week}, health::health_check}, error::ApiError, services::{activity_controller::ActivityController, auth_controller::{AuthController, StravaConfig}, database::Database, strava_client::StravaClient}};
+use crate::{api::{activities::{read_activities, populate_activities, get_activities_from_this_week, get_activities_from_this_month}, health::health_check}, error::ApiError, services::{activity_controller::ActivityController, auth_controller::{AuthController, StravaConfig}, database::Database, strava_client::StravaClient}};
 
 pub fn get_strava_config() -> StravaConfig {
     return StravaConfig::from_env()
@@ -114,6 +114,7 @@ fn create_app(state: AppState) -> Router {
         .route("/read", get(read_activities))
         .route("/populate", post(populate_activities))
         .route("/activities/week", get(get_activities_from_this_week))
+        .route("/activities/month", get(get_activities_from_this_month))
         .with_state(state)
 }
 
