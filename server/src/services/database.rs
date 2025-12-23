@@ -108,7 +108,7 @@ impl Database {
             }
         }
 
-        println!("Batch insert complete. Attempted to insert {}/{} failed.", failed_insertions, activities.len());
+        println!("Batch insert complete. Inserted {:?} new activities.", activities.len() - failed_insertions);
 
         Ok(())
     }
