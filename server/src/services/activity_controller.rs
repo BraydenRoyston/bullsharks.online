@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{error::ApiError, models::{bullshark::BullSharkActivity, club::ClubActivity}, services::{database::Database, strava_client::{StravaClient}}};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, FixedOffset, Utc};
 use sha2::{Digest, Sha256};
 
 pub struct ActivityController {
@@ -29,7 +29,8 @@ impl ActivityController {
     }
 
     pub fn convert_activities(&self, club_activities: &[ClubActivity]) -> Result<Vec<BullSharkActivity>, ApiError> {
-        let batch_time = Utc::now();
+        // Get current UTC time and convert to FixedOffset for model compatibility
+        let batch_time = Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap());
 
         club_activities
             .iter()
@@ -37,7 +38,7 @@ impl ActivityController {
             .collect()
     }
 
-    pub fn convert_activity_to_bullshark_activity(&self, club_activity: &ClubActivity, time: DateTime<Utc>) -> Result<BullSharkActivity, ApiError> {
+    pub fn convert_activity_to_bullshark_activity(&self, club_activity: &ClubActivity, time: DateTime<FixedOffset>) -> Result<BullSharkActivity, ApiError> {
         let hash = self.create_hash_for_activity(club_activity)?;
         let athlete = club_activity.athlete
             .as_ref()

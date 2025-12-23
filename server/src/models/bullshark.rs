@@ -2,12 +2,12 @@
 These are internal models that we define.
 */
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, FixedOffset};
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct BullSharkActivity {
     pub id: String,
-    pub date: DateTime<Utc>,
+    pub date: DateTime<FixedOffset>,
     pub athlete_name: Option<String>,
     pub resource_state: Option<i64>,
     pub name: Option<String>,

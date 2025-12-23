@@ -1,5 +1,7 @@
 use sqlx::PgPool;
 use crate::{error::ApiError, models::{bullshark::BullSharkActivity, oauth::StravaAuthToken}, utils::database_utils};
+use chrono::{DateTime, Utc, TimeZone, Offset};
+use chrono_tz::America::Los_Angeles;
 
 pub struct Database {
     pool: PgPool,
@@ -59,6 +61,8 @@ impl Database {
         Ok(result.map(database_utils::map_row_to_token))
     }
     // MARK: Auth Tokens End
+
+
 
 
 
@@ -130,9 +134,17 @@ impl Database {
         .map_err(|e| ApiError::DatabaseError(format!("Failed to fetch activities: {}", e)))?;
 
         let activities: Vec<BullSharkActivity> = rows.into_iter().map(|row| {
+            // Get timestamp from DB (stored as UTC)
+            let date_utc: DateTime<Utc> = row.get("date");
+
+            // Convert to Pacific timezone
+            let date_pacific_tz = Los_Angeles.from_utc_datetime(&date_utc.naive_utc());
+            // Convert to FixedOffset for serialization support
+            let date_pacific = date_pacific_tz.with_timezone(&date_pacific_tz.offset().fix());
+
             BullSharkActivity {
                 id: row.get("id"),
-                date: row.get("date"),
+                date: date_pacific,
                 athlete_name: row.get("athlete_name"),
                 resource_state: row.get("resource_state"),
                 name: row.get("name"),
@@ -150,6 +162,10 @@ impl Database {
         Ok(activities)
     }
     // MARK: Activities End
+
+
+
+
 
     // MARK: Health Check
     pub async fn health_check(&self) -> Result<(), ApiError> {
