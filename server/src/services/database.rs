@@ -1,5 +1,5 @@
 use sqlx::PgPool;
-use crate::{error::ApiError, models::{bullshark::BullSharkActivity, oauth::StravaAuthToken}, utils::database_utils};
+use crate::{error::ApiError, models::{athlete::Athlete, bullshark::BullSharkActivity, oauth::StravaAuthToken}, utils::database_utils};
 use chrono::{DateTime, Utc, TimeZone, Offset};
 use chrono_tz::America::Los_Angeles;
 
@@ -227,4 +227,79 @@ impl Database {
         Ok(())
     }
     // MARK: Health Check End
+
+
+
+
+
+    // MARK: Athletes
+    pub async fn insert_athlete(&self, athlete: &Athlete) -> Result<(), ApiError> {
+        sqlx::query(
+            r#"
+            INSERT INTO athletes
+            (id, name, team, event)
+            VALUES ($1, $2, $3, $4)
+            "#
+        )
+        .bind(&athlete.id)
+        .bind(&athlete.name)
+        .bind(&athlete.team)
+        .bind(&athlete.event)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| ApiError::DatabaseError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn insert_athletes(&self, athletes: &[Athlete]) -> Result<(), ApiError> {
+        if athletes.len() == 0 {
+            println!("insert_athletes | received an athletes slice with 0 length, skipping batch operation");
+            return Ok(())
+        }
+
+        let mut failed_insertions = 0;
+
+        for athlete in athletes {
+            match self.insert_athlete(athlete).await {
+                Ok(_) => {}
+                Err(_e) => {
+                    failed_insertions += 1;
+                }
+            }
+        }
+
+        println!("Batch insert complete. Inserted {:?} new athletes.", athletes.len() - failed_insertions);
+
+        Ok(())
+    }
+
+    pub async fn read_all_athletes(&self) -> Result<Vec<Athlete>, ApiError> {
+        use sqlx::Row;
+
+        println!("[DB] read_all_athletes: Starting query for all athletes");
+        let rows = sqlx::query(
+            r#"
+            SELECT id, name, team, event
+            FROM athletes
+            ORDER BY name ASC
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| ApiError::DatabaseError(format!("Failed to fetch athletes: {}", e)))?;
+
+        let athletes: Vec<Athlete> = rows.into_iter().map(|row| {
+            Athlete {
+                id: row.get("id"),
+                name: row.get("name"),
+                team: row.get("team"),
+                event: row.get("event"),
+            }
+        }).collect();
+
+        println!("[DB] read_all_athletes: Query completed, returned {} athletes", athletes.len());
+        Ok(athletes)
+    }
+    // MARK: Athletes End
 }
