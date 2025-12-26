@@ -116,9 +116,9 @@ impl ActivityController {
         let activities = self.db.get_activities_from_window(start_date, end_date).await?;
 
         let mut bulls_athlete_kilometers: HashMap<String, f64> = HashMap::new();
-        let mut bulls_weekly_kilometers: HashMap<NaiveDateTime, f64> = HashMap::new();
+        let mut bulls_week_data: HashMap<NaiveDateTime, WeekData> = HashMap::new();
         let mut sharks_athlete_kilometers: HashMap<String, f64> = HashMap::new();
-        let mut sharks_weekly_kilometers: HashMap<NaiveDateTime, f64> = HashMap::new();
+        let mut sharks_week_data: HashMap<NaiveDateTime, WeekData> = HashMap::new();
 
         // O(n) over each activity
         for activity in activities {
@@ -154,20 +154,33 @@ impl ActivityController {
             // update athlete hashmap
             *athlete_kilometers.entry(athlete_name.clone()).or_insert(0.0) += distance_kilometers;
 
-            let start_of_week = self.get_start_of_week_for_activity(activity);
+            let start_of_week = self.get_start_of_week_for_activity(&activity);
 
             // Update weekly kilometers for that week
             let weekly_kilometers = match team.as_str() {
-                "bulls" => &mut bulls_weekly_kilometers,
-                "sharks" => &mut sharks_weekly_kilometers,
+                "bulls" => &mut bulls_week_data,
+                "sharks" => &mut sharks_week_data,
                 _ => continue,
             };
-            *weekly_kilometers.entry(start_of_week).or_insert(0.0) += distance_kilometers;
+
+            let pacific_dt = Los_Angeles.from_local_datetime(&start_of_week).single()
+                .ok_or_else(|| ApiError::InternalConversionError(format!("Invalid datetime conversion for week start: {}", start_of_week)))?;
+            let week_start = pacific_dt.with_timezone(&pacific_dt.offset().fix());
+
+            let week_data = weekly_kilometers.entry(start_of_week).or_insert(WeekData { 
+                week_start: week_start, 
+                weekly_team_kilometers: 0.0, 
+                weekly_running_sum: 0.0, 
+                weekly_athlete_kilometers: HashMap::new() 
+            });
+
+            week_data.weekly_team_kilometers += distance_kilometers;
+            *week_data.weekly_athlete_kilometers.entry(athlete_name.to_string()).or_insert(0.0) += distance_kilometers;
         }
 
-        // Convert HashMap<NaiveDateTime, f64> to Vec<WeekData>
-        let bulls_weekly_vec = self.convert_weekly_map_to_vec(bulls_weekly_kilometers)?;
-        let sharks_weekly_vec = self.convert_weekly_map_to_vec(sharks_weekly_kilometers)?;
+        // Convert to vec, compute running sums, sort entries, etc. 
+        let bulls_weekly_vec = self.convert_weekly_map_to_vec(bulls_week_data)?;
+        let sharks_weekly_vec = self.convert_weekly_map_to_vec(sharks_week_data)?;
 
         let team_stats = TeamStats {
             bulls: TeamData {
@@ -220,7 +233,7 @@ impl ActivityController {
         Ok((start_date_utc, end_date_utc))
     }
 
-    fn get_start_of_week_for_activity(&self, activity: BullSharkActivity) -> NaiveDateTime {
+    fn get_start_of_week_for_activity(&self, activity: &BullSharkActivity) -> NaiveDateTime {
         let activity_date = activity.date;
         let activity_date_naive = activity_date.naive_local();
         let days_since_monday = activity_date_naive.weekday().num_days_from_monday();
@@ -231,29 +244,19 @@ impl ActivityController {
         start_of_week
     }
 
-    fn convert_weekly_map_to_vec(&self, weekly_map: HashMap<NaiveDateTime, f64>) -> Result<Vec<WeekData>, ApiError> {
+    fn convert_weekly_map_to_vec(&self, weekly_map: HashMap<NaiveDateTime, WeekData>) -> Result<Vec<WeekData>, ApiError> {
         let mut running_sum: f64 = 0.0;
-        let mut weekly_vec: Vec<(NaiveDateTime, f64)> = weekly_map
+        let mut weekly_vec: Vec<(NaiveDateTime, WeekData)> = weekly_map
             .into_iter()
-            .collect::<Vec<(NaiveDateTime, f64)>>();
+            .collect::<Vec<(NaiveDateTime, WeekData)>>();
         weekly_vec.sort_by(|a, b| a.0.cmp(&b.0));
 
         let week_data_vec = weekly_vec
             .into_iter()
-            .map(|(naive_dt, kilometers)| {
-                // Convert NaiveDateTime to Pacific timezone DateTime<FixedOffset>
-                let pacific_dt = Los_Angeles.from_local_datetime(&naive_dt).single()
-                    .ok_or_else(|| ApiError::InternalConversionError(format!("Invalid datetime conversion for week start: {}", naive_dt)))?;
-
-                // Convert to FixedOffset for serialization
-                let week_start = pacific_dt.with_timezone(&pacific_dt.offset().fix());
-                running_sum += kilometers;
-
-                Ok(WeekData {
-                    week_start,
-                    weekly_team_kilometers: kilometers,
-                    weekly_running_sum: running_sum,
-                })
+            .map(|(_naive_dt, mut week_data)| {
+                running_sum += week_data.weekly_team_kilometers;
+                week_data.weekly_running_sum += running_sum;
+                Ok(week_data)
             })
             .collect::<Result<Vec<WeekData>, ApiError>>()?;
 

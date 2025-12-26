@@ -7,8 +7,12 @@ use serde::{Deserialize, Serialize};
 pub struct WeekData {
    #[serde(rename = "weekStart")] 
    pub week_start: DateTime<FixedOffset>,
+   #[serde(rename = "weeklyTeamKilometers")]
    pub weekly_team_kilometers: f64,
+   #[serde(rename = "weeklyRunningSum")]
    pub weekly_running_sum: f64,
+   #[serde(rename = "weeklyAthleteKilometers")]
+   pub weekly_athlete_kilometers: HashMap<String, f64>
 }
 
 // Response structures for get_team_stats
