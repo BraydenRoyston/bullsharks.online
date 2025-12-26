@@ -1,11 +1,9 @@
 use std::sync::Arc;
 
 use axum::{Router, routing::{get, post}, extract::FromRef};
-use chrono::Utc;
 use sqlx::{PgPool};
-use tokio_cron_scheduler::{JobScheduler, Job};
 
-use crate::{api::{activities::{read_activities, populate_activities, get_activities_from_this_week, get_activities_from_this_month, update_athletes, get_team_stats}, health::health_check}, error::ApiError, services::{activity_controller::ActivityController, auth_controller::{AuthController, StravaConfig}, database::Database, strava_client::StravaClient}};
+use crate::{api::{activities::{read_activities, populate_activities, get_activities_from_this_week, get_activities_from_this_month, get_team_stats}, health::health_check}, services::{activity_controller::ActivityController, auth_controller::{AuthController, StravaConfig}, database::Database, strava_client::StravaClient}};
 
 pub fn get_strava_config() -> StravaConfig {
     return StravaConfig::from_env()
@@ -42,49 +40,6 @@ async fn get_pg_pool() -> Result<PgPool, sqlx::Error> {
     println!("Database connected!");
     
     Ok(pool)
-}
-
-pub async fn schedule_tasks(db: Arc<Database>, strava_client: StravaClient) -> Result<(), ApiError> {
-    let cron_top_of_every_hour =  "0 0 * * * *";
-    let fast_cron =  "*/30 * * * * *";
-
-    println!("Creating scheduler and adding tasks...");
-
-    let scheduler = JobScheduler::new()
-        .await
-        .map_err(|e| ApiError::StartupError(format!("Failed to create scheduler: {}", e)))?;
-
-    // Create the ActivityController instance
-    let activity_controller = Arc::new(ActivityController::new(
-        db,
-        strava_client
-    ));
-
-    // Clone the Arc to move into the closure
-    let controller: Arc<ActivityController> = Arc::clone(&activity_controller);
-
-    scheduler
-        .add(
-            Job::new_async(fast_cron, move|_uuid, _lock| { // top of every hour cron
-                let controller = Arc::clone(&controller);
-                Box::pin(async move {
-                    println!("Running job to populate new activities. Current time is {}", Utc::now());
-                    if let Err(e) = controller.populate_new_activities().await {
-                        eprintln!("Failed to populate new activities: {:?}", e);
-                    }
-                })
-            })
-            .map_err(|e| ApiError::StartupError(format!("Failed to create job: {}", e)))?
-        )
-        .await
-        .map_err(|e| ApiError::StartupError(format!("Failed to add job: {}", e)))?;
-
-    scheduler.start()
-        .await
-        .map_err(|e| ApiError::StartupError(format!("Failed to start scheduler:{}", e)))?;
-
-    println!("Scheduler started successfully.");
-    Ok(())
 }
 
 // AppState holds both Database and ActivityController for routing

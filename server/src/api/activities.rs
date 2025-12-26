@@ -3,10 +3,8 @@ use std::{sync::Arc};
 use axum::{Json, extract::State, http::{StatusCode, HeaderMap}};
 use chrono::{Datelike, Duration, TimeZone, Utc};
 use chrono_tz::America::Los_Angeles;
-use dashmap::DashMap;
-use uuid::Uuid;
 
-use crate::{error::ApiError, models::{athlete::Athlete, bullshark::BullSharkActivity, team_stats::TeamStats}, services::{activity_controller::ActivityController, database::Database}};
+use crate::{error::ApiError, models::{bullshark::BullSharkActivity, team_stats::TeamStats}, services::{activity_controller::ActivityController, database::Database}};
 
 pub async fn read_activities(
     State(db): State<Arc<Database>>
@@ -121,35 +119,6 @@ pub async fn get_activities_from_this_month(
     let activities = db.get_activities_from_window(start_utc, end_utc).await?;
     Ok(Json(activities))
 }
-
-pub async fn update_athletes(
-    State(db): State<Arc<Database>>
-) -> Result<String, ApiError> {
-    let activities = db.get_all_activities().await?;
-    let dashmap: DashMap<String, i64> = DashMap::new();
-
-    for activity in activities {
-        let athlete_name = activity.athlete_name.expect("update athlete error");
-
-        if dashmap.contains_key(&athlete_name) {
-            continue;
-        }
-
-        let athlete: Athlete = Athlete { 
-            id: Uuid::new_v4().to_string(), 
-            name: athlete_name.clone(), 
-            team: "bulls".to_string(), 
-            event: "placeholder".to_string() 
-        };
-
-        let _result = db.insert_athlete(&athlete).await?;
-        dashmap.insert(athlete_name, 1);
-    }
-
-    Ok("ok".to_string())
-}
-
-
 
 pub async fn get_team_stats(
     State(activity_controller): State<Arc<ActivityController>>,
