@@ -232,7 +232,13 @@ impl ActivityController {
     }
 
     fn convert_weekly_map_to_vec(&self, weekly_map: HashMap<NaiveDateTime, f64>) -> Result<Vec<WeekData>, ApiError> {
-        let mut weekly_vec: Vec<WeekData> = weekly_map
+        let mut running_sum: f64 = 0.0;
+        let mut weekly_vec: Vec<(NaiveDateTime, f64)> = weekly_map
+            .into_iter()
+            .collect::<Vec<(NaiveDateTime, f64)>>();
+        weekly_vec.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let week_data_vec = weekly_vec
             .into_iter()
             .map(|(naive_dt, kilometers)| {
                 // Convert NaiveDateTime to Pacific timezone DateTime<FixedOffset>
@@ -241,18 +247,17 @@ impl ActivityController {
 
                 // Convert to FixedOffset for serialization
                 let week_start = pacific_dt.with_timezone(&pacific_dt.offset().fix());
+                running_sum += kilometers;
 
                 Ok(WeekData {
                     week_start,
-                    team_kilometers: kilometers,
+                    weekly_team_kilometers: kilometers,
+                    weekly_running_sum: running_sum,
                 })
             })
             .collect::<Result<Vec<WeekData>, ApiError>>()?;
 
-        // Sort by week_start in ascending order
-        weekly_vec.sort_by(|a, b| a.week_start.cmp(&b.week_start));
-
-        Ok(weekly_vec)
+        Ok(week_data_vec)
     }
 
 }
