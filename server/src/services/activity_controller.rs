@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{error::ApiError, models::{bullshark::BullSharkActivity, club::ClubActivity, team_stats::{TeamData, TeamStats}}, services::{database::Database, strava_client::StravaClient}};
-use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDateTime, TimeZone, Utc};
+use crate::{error::ApiError, models::{bullshark::BullSharkActivity, club::ClubActivity, team_stats::{TeamData, TeamStats, WeekData}}, services::{database::Database, strava_client::StravaClient}};
+use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDateTime, Offset, TimeZone, Utc};
 use chrono_tz::America::Los_Angeles;
 use sha2::{Digest, Sha256};
 
@@ -116,9 +116,9 @@ impl ActivityController {
         let activities = self.db.get_activities_from_window(start_date, end_date).await?;
 
         let mut bulls_athlete_kilometers: HashMap<String, f64> = HashMap::new();
-        let mut bulls_weekly_kilometers: HashMap<String, f64> = HashMap::new();
+        let mut bulls_weekly_kilometers: HashMap<NaiveDateTime, f64> = HashMap::new();
         let mut sharks_athlete_kilometers: HashMap<String, f64> = HashMap::new();
-        let mut sharks_weekly_kilometers: HashMap<String, f64> = HashMap::new();
+        let mut sharks_weekly_kilometers: HashMap<NaiveDateTime, f64> = HashMap::new();
 
         // O(n) over each activity
         for activity in activities {
@@ -138,7 +138,7 @@ impl ActivityController {
                 None => continue,
             };
 
-            // Get activity distance (kilometers) 
+            // Get activity distance (kilometers)
             let distance_meters = match activity.distance {
                 Some(d) => d,
                 None => continue,
@@ -156,25 +156,27 @@ impl ActivityController {
 
             let start_of_week = self.get_start_of_week_for_activity(activity);
 
-            let week_key = start_of_week.format("%B %-d").to_string();
-
             // Update weekly kilometers for that week
             let weekly_kilometers = match team.as_str() {
                 "bulls" => &mut bulls_weekly_kilometers,
                 "sharks" => &mut sharks_weekly_kilometers,
                 _ => continue,
             };
-            *weekly_kilometers.entry(week_key).or_insert(0.0) += distance_kilometers;
+            *weekly_kilometers.entry(start_of_week).or_insert(0.0) += distance_kilometers;
         }
+
+        // Convert HashMap<NaiveDateTime, f64> to Vec<WeekData>
+        let bulls_weekly_vec = self.convert_weekly_map_to_vec(bulls_weekly_kilometers)?;
+        let sharks_weekly_vec = self.convert_weekly_map_to_vec(sharks_weekly_kilometers)?;
 
         let team_stats = TeamStats {
             bulls: TeamData {
                 athlete_kilometers: bulls_athlete_kilometers,
-                weekly_kilometers: bulls_weekly_kilometers,
+                weekly_kilometers: bulls_weekly_vec,
             },
             sharks: TeamData {
                 athlete_kilometers: sharks_athlete_kilometers,
-                weekly_kilometers: sharks_weekly_kilometers,
+                weekly_kilometers: sharks_weekly_vec,
             },
         };
 
@@ -227,6 +229,30 @@ impl ActivityController {
             .unwrap()
             - Duration::days(days_since_monday as i64);
         start_of_week
+    }
+
+    fn convert_weekly_map_to_vec(&self, weekly_map: HashMap<NaiveDateTime, f64>) -> Result<Vec<WeekData>, ApiError> {
+        let mut weekly_vec: Vec<WeekData> = weekly_map
+            .into_iter()
+            .map(|(naive_dt, kilometers)| {
+                // Convert NaiveDateTime to Pacific timezone DateTime<FixedOffset>
+                let pacific_dt = Los_Angeles.from_local_datetime(&naive_dt).single()
+                    .ok_or_else(|| ApiError::InternalConversionError(format!("Invalid datetime conversion for week start: {}", naive_dt)))?;
+
+                // Convert to FixedOffset for serialization
+                let week_start = pacific_dt.with_timezone(&pacific_dt.offset().fix());
+
+                Ok(WeekData {
+                    week_start,
+                    team_kilometers: kilometers,
+                })
+            })
+            .collect::<Result<Vec<WeekData>, ApiError>>()?;
+
+        // Sort by week_start in ascending order
+        weekly_vec.sort_by(|a, b| a.week_start.cmp(&b.week_start));
+
+        Ok(weekly_vec)
     }
 
 }
