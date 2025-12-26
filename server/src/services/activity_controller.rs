@@ -1,7 +1,8 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use crate::{error::ApiError, models::{bullshark::BullSharkActivity, club::ClubActivity}, services::{database::Database, strava_client::{StravaClient}}};
-use chrono::{DateTime, FixedOffset, Utc};
+use crate::{error::ApiError, models::{bullshark::BullSharkActivity, club::ClubActivity, team_stats::{TeamData, TeamStats}}, services::{database::Database, strava_client::StravaClient}};
+use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDateTime, TimeZone, Utc};
+use chrono_tz::America::Los_Angeles;
 use sha2::{Digest, Sha256};
 
 pub struct ActivityController {
@@ -105,4 +106,127 @@ impl ActivityController {
         // Attempt to verify we can get a valid Strava auth token
         self.strava_client.health_check().await
     }
+
+    pub async fn get_team_stats(&self) -> Result<TeamStats, ApiError> {
+        let athlete_teams = self.build_athlete_team_map().await?;
+        let (start_date, end_date) = self.get_team_stat_dates()?;
+
+        println!("[ACTIVITY_CONTROLLER]: getting team stats from {} to {}", start_date, end_date);
+
+        let activities = self.db.get_activities_from_window(start_date, end_date).await?;
+
+        let mut bulls_athlete_kilometers: HashMap<String, f64> = HashMap::new();
+        let mut bulls_weekly_kilometers: HashMap<String, f64> = HashMap::new();
+        let mut sharks_athlete_kilometers: HashMap<String, f64> = HashMap::new();
+        let mut sharks_weekly_kilometers: HashMap<String, f64> = HashMap::new();
+
+        // O(n) over each activity
+        for activity in activities {
+            if !self.valid_activity(&activity) {
+                continue;
+            }
+
+            // Get athlete name
+            let athlete_name = match &activity.athlete_name {
+                Some(name) => name,
+                None => continue,
+            };
+
+            // Get athlete team
+            let team = match athlete_teams.get(athlete_name) {
+                Some(t) => t,
+                None => continue,
+            };
+
+            // Get activity distance (kilometers) 
+            let distance_meters = match activity.distance {
+                Some(d) => d,
+                None => continue,
+            };
+            let distance_kilometers = distance_meters / 1000.0;
+
+            // find the right hashmap for this athlete
+            let athlete_kilometers = match team.as_str() {
+                "bulls" => &mut bulls_athlete_kilometers,
+                "sharks" => &mut sharks_athlete_kilometers,
+                _ => continue,
+            };
+            // update athlete hashmap
+            *athlete_kilometers.entry(athlete_name.clone()).or_insert(0.0) += distance_kilometers;
+
+            let start_of_week = self.get_start_of_week_for_activity(activity);
+
+            let week_key = start_of_week.format("%B %-d").to_string();
+
+            // Update weekly kilometers for that week
+            let weekly_kilometers = match team.as_str() {
+                "bulls" => &mut bulls_weekly_kilometers,
+                "sharks" => &mut sharks_weekly_kilometers,
+                _ => continue,
+            };
+            *weekly_kilometers.entry(week_key).or_insert(0.0) += distance_kilometers;
+        }
+
+        let team_stats = TeamStats {
+            bulls: TeamData {
+                athlete_kilometers: bulls_athlete_kilometers,
+                weekly_kilometers: bulls_weekly_kilometers,
+            },
+            sharks: TeamData {
+                athlete_kilometers: sharks_athlete_kilometers,
+                weekly_kilometers: sharks_weekly_kilometers,
+            },
+        };
+
+        println!("[API] get_team_stats: Successfully calculated team stats");
+        Ok(team_stats)
+    }
+
+    pub fn valid_activity(&self, activity: &BullSharkActivity) -> bool {
+        if let Some(sport_type) = &activity.sport_type {
+            if sport_type != "Run" {
+                return false;
+            }
+        } else {
+            return false; 
+        }
+        return true;
+    }
+
+    pub async fn build_athlete_team_map(&self) -> Result<HashMap<String, String>, ApiError> {
+        let athletes = self.db.read_all_athletes().await?;
+        let mut athlete_teams: HashMap<String, String> = HashMap::new();
+        for athlete in athletes {
+            athlete_teams.insert(athlete.name.clone(), athlete.team.clone());
+        }
+
+        Ok(athlete_teams)
+    }
+
+    // Hard coding team stat dates for now - club competition stats December 29th.
+    fn get_team_stat_dates(&self) -> Result<(DateTime<Utc>, DateTime<Utc>), ApiError> {
+        let start_date_naive = chrono::NaiveDate::from_ymd_opt(2025, 12, 1)
+            .ok_or_else(|| ApiError::InternalConversionError("Invalid start date".to_string()))?
+            .and_hms_opt(0, 0, 0)
+            .ok_or_else(|| ApiError::InternalConversionError("Invalid start time".to_string()))?;
+        let start_date_pacific = Los_Angeles.from_local_datetime(&start_date_naive).single()
+            .ok_or_else(|| ApiError::InternalConversionError("Invalid start date time".to_string()))?;
+        let start_date_utc = start_date_pacific.with_timezone(&Utc);
+
+        let end_date_utc = Utc::now();
+
+        Ok((start_date_utc, end_date_utc))
+    }
+
+    fn get_start_of_week_for_activity(&self, activity: BullSharkActivity) -> NaiveDateTime {
+        let activity_date = activity.date;
+        let activity_date_naive = activity_date.naive_local();
+        let days_since_monday = activity_date_naive.weekday().num_days_from_monday();
+        let start_of_week = activity_date_naive.date()
+            .and_hms_opt(0, 0, 0)
+            .unwrap()
+            - Duration::days(days_since_monday as i64);
+        start_of_week
+    }
+
 }
