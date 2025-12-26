@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::{Router, routing::{get, post}, extract::FromRef};
 use sqlx::{PgPool};
 
-use crate::{api::{activities::{read_activities, populate_activities, get_activities_from_this_week, get_activities_from_this_month, get_team_stats}, health::health_check}, services::{activity_controller::ActivityController, auth_controller::{AuthController, StravaConfig}, database::Database, strava_client::StravaClient}};
+use crate::{api::{activities::{read_activities, populate_activities, get_activities_from_this_week, get_activities_from_this_month, get_activities_from_custom_window, get_team_stats}, health::health_check}, services::{activity_controller::ActivityController, auth_controller::{AuthController, StravaConfig}, database::Database, strava_client::StravaClient}};
 
 pub fn get_strava_config() -> StravaConfig {
     return StravaConfig::from_env()
@@ -70,6 +70,7 @@ fn create_app(state: AppState) -> Router {
         .route("/populate", post(populate_activities))
         .route("/activities/week", get(get_activities_from_this_week))
         .route("/activities/month", get(get_activities_from_this_month))
+        .route("/activities/window", get(get_activities_from_custom_window))
         .route("/team_stats", get(get_team_stats))
         .with_state(state)
 }

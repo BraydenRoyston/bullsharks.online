@@ -19,6 +19,7 @@ pub enum ApiError {
     InternalConversionError(String),
     ExternalAPIError(String),
     Unauthorized(String),
+    BadRequest(String),
 }
 
 /*
@@ -51,6 +52,10 @@ impl IntoResponse for ApiError {
             ),
             ApiError::Unauthorized(msg) => (
                 StatusCode::UNAUTHORIZED,
+                msg
+            ),
+            ApiError::BadRequest(msg) => (
+                StatusCode::BAD_REQUEST,
                 msg
             ),
         };

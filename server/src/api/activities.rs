@@ -1,8 +1,9 @@
 use std::{sync::Arc};
 
-use axum::{Json, extract::State, http::{StatusCode, HeaderMap}};
-use chrono::{Datelike, Duration, TimeZone, Utc};
+use axum::{Json, extract::{Query, State}, http::{StatusCode, HeaderMap}};
+use chrono::{DateTime, Datelike, Duration, TimeZone, Utc};
 use chrono_tz::America::Los_Angeles;
+use serde::Deserialize;
 
 use crate::{error::ApiError, models::{bullshark::BullSharkActivity, team_stats::TeamStats}, services::{activity_controller::ActivityController, database::Database}};
 
@@ -114,6 +115,30 @@ pub async fn get_activities_from_this_month(
     let end_utc = end_of_month_pacific.with_timezone(&Utc);
 
     println!("[API] get_activities_from_this_month: Querying from {} to {}", start_utc, end_utc);
+
+    // Query database
+    let activities = db.get_activities_from_window(start_utc, end_utc).await?;
+    Ok(Json(activities))
+}
+
+#[derive(Deserialize)]
+pub struct WindowQuery {
+    start: String,
+    end: String,
+}
+
+pub async fn get_activities_from_custom_window(
+    Query(params): Query<WindowQuery>,
+    State(db): State<Arc<Database>>
+) -> Result<Json<Vec<BullSharkActivity>>, ApiError> {
+    // Parse the datetime strings into DateTime<Utc>
+    let start_utc = params.start.parse::<DateTime<Utc>>()
+        .map_err(|e| ApiError::BadRequest(format!("Invalid start datetime format: {}. Expected RFC3339 format (e.g., 2024-01-01T00:00:00Z)", e)))?;
+
+    let end_utc = params.end.parse::<DateTime<Utc>>()
+        .map_err(|e| ApiError::BadRequest(format!("Invalid end datetime format: {}. Expected RFC3339 format (e.g., 2024-01-31T23:59:59Z)", e)))?;
+
+    println!("[API] get_activities_from_custom_window: Querying from {} to {}", start_utc, end_utc);
 
     // Query database
     let activities = db.get_activities_from_window(start_utc, end_utc).await?;
