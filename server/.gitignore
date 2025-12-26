@@ -25,3 +25,7 @@ Cargo.lock
 # OS files
 Thumbs.db
 .DS_Store
+
+# Deployment script
+deploy.sh
+
