@@ -1,8 +1,11 @@
 {
     "cSpell.words": [
+        "bullshark",
         "dotenv",
         "dotenvy",
+        "firstname",
+        "lastname",
         "reqwest",
-        "Strava"
+        "STRAVA"
     ]
 }
