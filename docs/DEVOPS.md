@@ -44,6 +44,14 @@ This server uses **Google Cloud Scheduler** to automatically sync Strava activit
 
 ---
 
+## Scheduler Commands
+
+### Pause the scheduler
+gcloud scheduler jobs pause populate-activities --location=us-central1
+
+### Start the scheduler
+gcloud scheduler jobs resume populate-activities --location=us-central1
+
 ## Manual Activity Sync
 
 ### Trigger Sync via Cloud Scheduler
