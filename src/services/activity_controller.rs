@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{error::ApiError, models::{bullshark::BullSharkActivity, club::ClubActivity, team_stats::{TeamData, TeamStats, WeekData}}, services::{database::Database, strava_client::StravaClient}};
+use crate::{error::ApiError, models::{athlete::Athlete, bullshark::BullSharkActivity, club::ClubActivity, team_stats::{TeamData, TeamStats, WeekData}}, services::{database::Database, strava_client::StravaClient}};
 use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDateTime, Offset, TimeZone, Utc};
 use chrono_tz::America::Los_Angeles;
 use sha2::{Digest, Sha256};
@@ -261,6 +261,11 @@ impl ActivityController {
             .collect::<Result<Vec<WeekData>, ApiError>>()?;
 
         Ok(week_data_vec)
+    }
+
+    pub async fn read_all_athletes(&self) -> Result<Vec<Athlete>, ApiError> {
+        let result = self.db.read_all_athletes().await?;
+        Ok(result)
     }
 
 }
