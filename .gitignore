@@ -25,6 +25,7 @@ Cargo.lock
 # OS files
 Thumbs.db
 
-# Deployment script
+# Deployment scripts
 deploy.sh
+sync-secrets.sh
 
