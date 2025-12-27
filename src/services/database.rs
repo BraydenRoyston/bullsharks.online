@@ -96,23 +96,54 @@ impl Database {
     }
 
     pub async fn insert_activities(&self, activities: &[BullSharkActivity]) -> Result<(), ApiError> {
-        if activities.len() == 0 {
+        if activities.is_empty() {
             println!("insert_activities | received an activities slice with 0 length, skipping batch operation");
             return Ok(())
         }
 
-        let mut failed_insertions = 0;
+        // Build arrays for each column
+        let ids: Vec<i64> = activities.iter().map(|a| a.id).collect();
+        let dates: Vec<DateTime<Utc>> = activities.iter().map(|a| a.date.with_timezone(&Utc)).collect();
+        let resource_states: Vec<i32> = activities.iter().map(|a| a.resource_state).collect();
+        let names: Vec<String> = activities.iter().map(|a| a.name.clone()).collect();
+        let distances: Vec<f64> = activities.iter().map(|a| a.distance).collect();
+        let moving_times: Vec<i32> = activities.iter().map(|a| a.moving_time).collect();
+        let elapsed_times: Vec<i32> = activities.iter().map(|a| a.elapsed_time).collect();
+        let total_elevation_gains: Vec<f64> = activities.iter().map(|a| a.total_elevation_gain).collect();
+        let sport_types: Vec<String> = activities.iter().map(|a| a.sport_type.clone()).collect();
+        let workout_types: Vec<Option<i32>> = activities.iter().map(|a| a.workout_type).collect();
+        let device_names: Vec<Option<String>> = activities.iter().map(|a| a.device_name.clone()).collect();
+        let athlete_names: Vec<String> = activities.iter().map(|a| a.athlete_name.clone()).collect();
 
-        for activity in activities {
-            match self.insert_activity(activity).await {
-                Ok(_) => {}
-                Err(_e) => {
-                    failed_insertions += 1;
-                }
-            }
-        }
+        // Use PostgreSQL UNNEST to insert all rows in a single query
+        let result = sqlx::query(
+            r#"
+            INSERT INTO bullshark_activities
+            (id, date, resource_state, name, distance, moving_time, elapsed_time,
+            total_elevation_gain, sport_type, workout_type, device_name, athlete_name)
+            SELECT * FROM UNNEST($1::bigint[], $2::timestamptz[], $3::int[], $4::text[], $5::float8[],
+                                 $6::int[], $7::int[], $8::float8[], $9::text[], $10::int[],
+                                 $11::text[], $12::text[])
+            ON CONFLICT (id) DO NOTHING
+            "#
+        )
+        .bind(&ids)
+        .bind(&dates)
+        .bind(&resource_states)
+        .bind(&names)
+        .bind(&distances)
+        .bind(&moving_times)
+        .bind(&elapsed_times)
+        .bind(&total_elevation_gains)
+        .bind(&sport_types)
+        .bind(&workout_types)
+        .bind(&device_names)
+        .bind(&athlete_names)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| ApiError::DatabaseError(format!("Failed to batch insert activities: {}", e)))?;
 
-        println!("Batch insert complete. Inserted {:?} new activities.", activities.len() - failed_insertions);
+        println!("Batch insert complete. Inserted {} new activities.", result.rows_affected());
 
         Ok(())
     }
@@ -253,23 +284,35 @@ impl Database {
     }
 
     pub async fn insert_athletes(&self, athletes: &[Athlete]) -> Result<(), ApiError> {
-        if athletes.len() == 0 {
+        if athletes.is_empty() {
             println!("insert_athletes | received an athletes slice with 0 length, skipping batch operation");
             return Ok(())
         }
 
-        let mut failed_insertions = 0;
+        // Build arrays for each column
+        let ids: Vec<String> = athletes.iter().map(|a| a.id.clone()).collect();
+        let names: Vec<String> = athletes.iter().map(|a| a.name.clone()).collect();
+        let teams: Vec<String> = athletes.iter().map(|a| a.team.clone()).collect();
+        let events: Vec<String> = athletes.iter().map(|a| a.event.clone()).collect();
 
-        for athlete in athletes {
-            match self.insert_athlete(athlete).await {
-                Ok(_) => {}
-                Err(_e) => {
-                    failed_insertions += 1;
-                }
-            }
-        }
+        // Use PostgreSQL UNNEST to insert all rows in a single query
+        let result = sqlx::query(
+            r#"
+            INSERT INTO athletes
+            (id, name, team, event)
+            SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[])
+            ON CONFLICT (id) DO NOTHING
+            "#
+        )
+        .bind(&ids)
+        .bind(&names)
+        .bind(&teams)
+        .bind(&events)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| ApiError::DatabaseError(format!("Failed to batch insert athletes: {}", e)))?;
 
-        println!("Batch insert complete. Inserted {:?} new athletes.", athletes.len() - failed_insertions);
+        println!("Batch insert complete. Inserted {} new athletes.", result.rows_affected());
 
         Ok(())
     }
