@@ -220,7 +220,7 @@ impl ActivityController {
 
     // Hard coding team stat dates for now - club competition stats December 29th.
     fn get_team_stat_dates(&self) -> Result<(DateTime<Utc>, DateTime<Utc>), ApiError> {
-        let start_date_naive = chrono::NaiveDate::from_ymd_opt(2025, 12, 15)
+        let start_date_naive = chrono::NaiveDate::from_ymd_opt(2025, 12, 1)
             .ok_or_else(|| ApiError::InternalConversionError("Invalid start date".to_string()))?
             .and_hms_opt(0, 0, 0)
             .ok_or_else(|| ApiError::InternalConversionError("Invalid start time".to_string()))?;
