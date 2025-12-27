@@ -102,18 +102,18 @@ impl Database {
         }
 
         // Build arrays for each column
-        let ids: Vec<i64> = activities.iter().map(|a| a.id).collect();
+        let ids: Vec<String> = activities.iter().map(|a| a.id.clone()).collect();
         let dates: Vec<DateTime<Utc>> = activities.iter().map(|a| a.date.with_timezone(&Utc)).collect();
-        let resource_states: Vec<i32> = activities.iter().map(|a| a.resource_state).collect();
-        let names: Vec<String> = activities.iter().map(|a| a.name.clone()).collect();
-        let distances: Vec<f64> = activities.iter().map(|a| a.distance).collect();
-        let moving_times: Vec<i32> = activities.iter().map(|a| a.moving_time).collect();
-        let elapsed_times: Vec<i32> = activities.iter().map(|a| a.elapsed_time).collect();
-        let total_elevation_gains: Vec<f64> = activities.iter().map(|a| a.total_elevation_gain).collect();
-        let sport_types: Vec<String> = activities.iter().map(|a| a.sport_type.clone()).collect();
-        let workout_types: Vec<Option<i32>> = activities.iter().map(|a| a.workout_type).collect();
+        let resource_states: Vec<Option<i64>> = activities.iter().map(|a| a.resource_state).collect();
+        let names: Vec<Option<String>> = activities.iter().map(|a| a.name.clone()).collect();
+        let distances: Vec<Option<f64>> = activities.iter().map(|a| a.distance).collect();
+        let moving_times: Vec<Option<i64>> = activities.iter().map(|a| a.moving_time).collect();
+        let elapsed_times: Vec<Option<i64>> = activities.iter().map(|a| a.elapsed_time).collect();
+        let total_elevation_gains: Vec<Option<f64>> = activities.iter().map(|a| a.total_elevation_gain).collect();
+        let sport_types: Vec<Option<String>> = activities.iter().map(|a| a.sport_type.clone()).collect();
+        let workout_types: Vec<Option<i64>> = activities.iter().map(|a| a.workout_type).collect();
         let device_names: Vec<Option<String>> = activities.iter().map(|a| a.device_name.clone()).collect();
-        let athlete_names: Vec<String> = activities.iter().map(|a| a.athlete_name.clone()).collect();
+        let athlete_names: Vec<Option<String>> = activities.iter().map(|a| a.athlete_name.clone()).collect();
 
         // Use PostgreSQL UNNEST to insert all rows in a single query
         let result = sqlx::query(
@@ -121,8 +121,8 @@ impl Database {
             INSERT INTO bullshark_activities
             (id, date, resource_state, name, distance, moving_time, elapsed_time,
             total_elevation_gain, sport_type, workout_type, device_name, athlete_name)
-            SELECT * FROM UNNEST($1::bigint[], $2::timestamptz[], $3::int[], $4::text[], $5::float8[],
-                                 $6::int[], $7::int[], $8::float8[], $9::text[], $10::int[],
+            SELECT * FROM UNNEST($1::text[], $2::timestamptz[], $3::bigint[], $4::text[], $5::float8[],
+                                 $6::bigint[], $7::bigint[], $8::float8[], $9::text[], $10::bigint[],
                                  $11::text[], $12::text[])
             ON CONFLICT (id) DO NOTHING
             "#
