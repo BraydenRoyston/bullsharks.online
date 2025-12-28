@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{error::ApiError, models::{athlete::Athlete, bullshark::BullSharkActivity, club::ClubActivity, team_stats::{TeamData, TeamStats, WeekData}}, services::{database::Database, strava_client::StravaClient}};
+use crate::{error::ApiError, models::{athlete::Athlete, athlete_training_data::{AllAthletesTrainingData, AthleteTrainingData, AthleteWeeklyData}, bullshark::BullSharkActivity, club::ClubActivity, team_stats::{TeamData, TeamStats, WeekData}}, services::{database::Database, strava_client::StravaClient}};
 use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDateTime, Offset, TimeZone, Utc};
 use chrono_tz::America::Los_Angeles;
 use sha2::{Digest, Sha256};
@@ -266,6 +266,89 @@ impl ActivityController {
     pub async fn read_all_athletes(&self) -> Result<Vec<Athlete>, ApiError> {
         let result = self.db.read_all_athletes().await?;
         Ok(result)
+    }
+
+    pub async fn get_all_athletes_training_data(&self) -> Result<AllAthletesTrainingData, ApiError> {
+        // Fetch all athletes from database
+        let athletes = self.db.read_all_athletes().await?;
+
+        // Create lookup map: athlete_name -> Athlete
+        let mut athlete_map: HashMap<String, Athlete> = HashMap::new();
+        for athlete in athletes {
+            athlete_map.insert(athlete.name.clone(), athlete);
+        }
+
+        // Fetch all activities from database (all-time data)
+        let activities = self.db.get_all_activities().await?;
+
+        // Create nested map: athlete_name -> (week_date_string -> kilometers)
+        let mut athlete_weekly_km: HashMap<String, HashMap<String, f64>> = HashMap::new();
+
+        // Process each activity
+        for activity in activities {
+            // Filter for valid activities (sport_type == "Run")
+            if !self.valid_activity(&activity) {
+                continue;
+            }
+
+            // Get athlete name
+            let athlete_name = match &activity.athlete_name {
+                Some(name) => name,
+                None => continue,
+            };
+
+            // Skip if athlete not in our database
+            if !athlete_map.contains_key(athlete_name) {
+                continue;
+            }
+
+            // Get activity distance in kilometers
+            let distance_meters = match activity.distance {
+                Some(d) => d,
+                None => continue,
+            };
+            let distance_kilometers = distance_meters / 1000.0;
+
+            // Calculate week start (Monday)
+            let start_of_week = self.get_start_of_week_for_activity(&activity);
+
+            // Format as ISO date string (YYYY-MM-DD)
+            let week_date_string = start_of_week.format("%Y-%m-%d").to_string();
+
+            // Add to nested map
+            let weekly_map = athlete_weekly_km
+                .entry(athlete_name.clone())
+                .or_insert_with(HashMap::new);
+
+            *weekly_map.entry(week_date_string).or_insert(0.0) += distance_kilometers;
+        }
+
+        // Build response for all athletes
+        let mut result: Vec<AthleteTrainingData> = Vec::new();
+
+        for (athlete_name, athlete) in athlete_map {
+            let weekly_kilometers = athlete_weekly_km
+                .get(&athlete_name)
+                .cloned()
+                .unwrap_or_else(HashMap::new);
+
+            result.push(AthleteTrainingData {
+                id: athlete.id,
+                name: athlete.name,
+                team: athlete.team,
+                event: athlete.event,
+                training_data: AthleteWeeklyData {
+                    weekly_kilometers,
+                },
+            });
+        }
+
+        // Sort by athlete name for consistent ordering
+        result.sort_by(|a, b| a.name.cmp(&b.name));
+
+        Ok(AllAthletesTrainingData {
+            athletes: result,
+        })
     }
 
 }
