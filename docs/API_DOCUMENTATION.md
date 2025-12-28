@@ -20,6 +20,7 @@ Welcome to the BullSharks Strava Activity API. This API provides access to Strav
   - [Get Activities from Custom Time Window](#get-activities-from-custom-time-window)
   - [Get Team Statistics](#get-team-statistics)
   - [Get All Athletes](#get-all-athletes)
+  - [Get Athletes Training Data](#get-athletes-training-data)
 - [Data Models](#data-models)
 - [Error Handling](#error-handling)
 - [Examples](#examples)
@@ -281,6 +282,69 @@ curl https://bullsharks-server-288102886042.us-central1.run.app/athletes
 
 ---
 
+### Get Athletes Training Data
+
+Retrieve detailed training data for all athletes, including athlete metadata and weekly kilometers aggregated across all time.
+
+**Endpoint:** `GET /athletes/training_data`
+
+**Response:** [AllAthletesTrainingData](#allathletesTrainingdata) object
+
+**Status Codes:**
+- `200 OK` - Success
+- `500 Internal Server Error` - Database error
+
+**Example:**
+```bash
+curl https://bullsharks-server-288102886042.us-central1.run.app/athletes/training_data
+```
+
+**Response Example:**
+```json
+{
+  "athletes": [
+    {
+      "id": "12345678",
+      "name": "Alice L.",
+      "team": "sharks",
+      "event": "half",
+      "trainingData": {
+        "weeklyKilometers": {
+          "2025-12-08": 70.8734,
+          "2025-12-15": 35.3095,
+          "2025-12-22": 31.2197
+        }
+      }
+    },
+    {
+      "id": "87654321",
+      "name": "Bob J.",
+      "team": "bulls",
+      "event": "full",
+      "trainingData": {
+        "weeklyKilometers": {
+          "2025-12-08": 89.152,
+          "2025-12-15": 47.6718,
+          "2025-12-22": 37.8037
+        }
+      }
+    }
+  ]
+}
+```
+
+**Notes:**
+- Returns data for **all athletes** in the database
+- Includes **all-time** training data (no date filtering)
+- Only includes activities with `sport_type: "Run"`
+- Weekly kilometers are aggregated by Monday-based weeks
+- Week keys are in ISO 8601 date format (YYYY-MM-DD)
+- Athletes with no activities will have an empty `weeklyKilometers` object
+- All distances are in **kilometers** (converted from meters)
+- Athletes are sorted alphabetically by name
+
+---
+
 ## Data Models
 
 ### Activity
@@ -398,6 +462,55 @@ Health check response.
 
 ---
 
+### AllAthletesTrainingData
+
+Response from `/athletes/training_data` endpoint containing training data for all athletes.
+
+```typescript
+{
+  athletes: AthleteTrainingData[];  // Array of athlete training data
+}
+```
+
+---
+
+### AthleteTrainingData
+
+Training data for a single athlete.
+
+```typescript
+{
+  id: string;                      // Unique Strava athlete ID
+  name: string;                    // Athlete's full name
+  team: string;                    // Team assignment ("bulls" or "sharks")
+  event: string;                   // Registered event type
+  trainingData: AthleteWeeklyData; // Weekly training statistics
+}
+```
+
+---
+
+### AthleteWeeklyData
+
+Weekly training statistics for an athlete.
+
+```typescript
+{
+  weeklyKilometers: {
+    [weekStartDate: string]: number;  // Week start date (YYYY-MM-DD) to kilometers
+  };
+}
+```
+
+**Notes:**
+- `weekStartDate` keys are in ISO 8601 date format (e.g., "2025-12-08")
+- Week start dates represent Monday of each week
+- Values are total kilometers run during that week
+- Only includes activities with `sport_type: "Run"`
+- All-time data (no date filtering)
+
+---
+
 ## Error Handling
 
 The API uses standard HTTP status codes to indicate success or failure.
@@ -479,11 +592,24 @@ async function getTeamStats() {
   return stats;
 }
 
+// Get athletes training data
+async function getAthletesTrainingData() {
+  const response = await fetch('https://bullsharks-server-288102886042.us-central1.run.app/athletes/training_data');
+  const data = await response.json();
+  return data;
+}
+
 // Example usage
 const activities = await getActivitiesInRange(
   '2024-12-01T00:00:00Z',
   '2024-12-31T23:59:59Z'
 );
+
+// Get training data and calculate total kilometers for a specific athlete
+const trainingData = await getAthletesTrainingData();
+const athlete = trainingData.athletes.find(a => a.name === 'Alice L.');
+const totalKm = Object.values(athlete.trainingData.weeklyKilometers).reduce((sum, km) => sum + km, 0);
+console.log(`${athlete.name} total: ${totalKm.toFixed(2)} km`);
 ```
 
 ---
@@ -530,6 +656,12 @@ def get_all_athletes():
     response.raise_for_status()
     return response.json()
 
+# Get athletes training data
+def get_athletes_training_data():
+    response = requests.get(f'{BASE_URL}/athletes/training_data')
+    response.raise_for_status()
+    return response.json()
+
 # Example usage
 activities = get_activities_in_range(
     '2024-12-01T00:00:00Z',
@@ -539,6 +671,15 @@ activities = get_activities_in_range(
 # Calculate total distance in kilometers
 total_km = sum(a['distance'] / 1000 for a in activities if a['distance'])
 print(f"Total distance: {total_km:.2f} km")
+
+# Get training data and calculate stats for each athlete
+training_data = get_athletes_training_data()
+for athlete_data in training_data['athletes']:
+    weekly_km = athlete_data['trainingData']['weeklyKilometers']
+    total_km = sum(weekly_km.values())
+    num_weeks = len(weekly_km)
+    avg_km = total_km / num_weeks if num_weeks > 0 else 0
+    print(f"{athlete_data['name']} ({athlete_data['team']}): {total_km:.2f} km total, {avg_km:.2f} km/week avg")
 ```
 
 ---
@@ -567,6 +708,9 @@ curl https://bullsharks-server-288102886042.us-central1.run.app/team_stats | jq
 # Get all athletes
 curl https://bullsharks-server-288102886042.us-central1.run.app/athletes | jq
 
+# Get athletes training data
+curl https://bullsharks-server-288102886042.us-central1.run.app/athletes/training_data | jq
+
 # Filter activities by sport type (using jq)
 curl https://bullsharks-server-288102886042.us-central1.run.app/read | \
   jq '[.[] | select(.sport_type == "Run")]'
@@ -574,6 +718,14 @@ curl https://bullsharks-server-288102886042.us-central1.run.app/read | \
 # Calculate total distance for the week
 curl https://bullsharks-server-288102886042.us-central1.run.app/activities/week | \
   jq '[.[] | .distance // 0] | add / 1000'
+
+# Get total kilometers for a specific athlete from training data
+curl https://bullsharks-server-288102886042.us-central1.run.app/athletes/training_data | \
+  jq '.athletes[] | select(.name == "Alice L.") | .trainingData.weeklyKilometers | add'
+
+# List all athletes with their total kilometers
+curl https://bullsharks-server-288102886042.us-central1.run.app/athletes/training_data | \
+  jq '.athletes[] | {name: .name, team: .team, totalKm: (.trainingData.weeklyKilometers | add)}'
 ```
 
 ---

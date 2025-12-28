@@ -83,6 +83,7 @@ Required environment variables (see `.env.example`):
 - `GET /activities/window` - Get activities from custom time range
 - `GET /team_stats` - Get Bulls vs Sharks team statistics
 - `GET /athletes` - Get all registered athletes
+- `GET /athletes/training_data` - Get athlete data with weekly kilometers for all athletes
 
 See the [API Documentation](/docs/API_DOCUMENTATION.md) for detailed endpoint specifications.
 
