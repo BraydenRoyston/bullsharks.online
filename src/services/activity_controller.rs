@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{error::ApiError, models::{athlete::Athlete, athlete_training_data::{AllAthletesTrainingData, AthleteTrainingData, AthleteWeeklyData}, bullshark::BullSharkActivity, club::ClubActivity, team_stats::{TeamData, TeamStats, WeekData}}, services::{database::Database, strava_client::StravaClient}};
+use crate::{error::ApiError, models::{athlete::Athlete, athlete_training_data::{AllAthletesTrainingData, AthleteTrainingData, AthleteWeeklyData, RiskyWeek}, bullshark::BullSharkActivity, club::ClubActivity, injury_risk::InjuryRiskType, team_stats::{TeamData, TeamStats, WeekData}}, services::{database::Database, strava_client::StravaClient}};
 use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDateTime, Offset, TimeZone, Utc};
 use chrono_tz::America::Los_Angeles;
 use sha2::{Digest, Sha256};
@@ -268,6 +268,85 @@ impl ActivityController {
         Ok(result)
     }
 
+    /// Analyze training volume patterns to detect injury risks
+    ///
+    /// This skeleton function provides the structure for week-over-week analysis.
+    /// TODO: Implement custom injury detection algorithms based on your requirements.
+    ///
+    /// # Arguments
+    /// * `weekly_kilometers` - HashMap of week start dates to total kilometers
+    ///
+    /// # Returns
+    /// Vector of RiskyWeek entries (only weeks with detected risks)
+    fn analyze_injury_risks(&self, weekly_kilometers: &HashMap<String, f64>) -> Vec<RiskyWeek> {
+        // Sort weeks chronologically for time-series analysis
+        let mut weeks: Vec<(&String, &f64)> = weekly_kilometers.iter().collect();
+        weeks.sort_by_key(|(week, _)| *week);
+
+        let mut risky_weeks: Vec<RiskyWeek> = Vec::new();
+
+        // Iterate through weeks with sliding window for week-over-week analysis
+        for i in 0..weeks.len() {
+            let current_week = weeks[i].0;
+            let current_km = *weeks[i].1;
+
+            let mut risks: Vec<String> = Vec::new();
+
+            // ==========================================
+            // TODO: IMPLEMENT INJURY DETECTION ALGORITHMS HERE
+            // ==========================================
+            //
+            // Example checks you might implement:
+            // 1. Volume spike detection (e.g., >10% increase week-over-week)
+            // 2. Insufficient recovery (high volume followed by high volume)
+            // 3. Overtraining patterns (multiple consecutive high-volume weeks)
+            // 4. Sudden mileage drops (potential injury indicator)
+            // 5. Rapid volume increases over multiple weeks
+            //
+            // You have access to:
+            // - current_week: &String - ISO date of current week (YYYY-MM-DD)
+            // - current_km: f64 - Kilometers for current week
+            // - weeks[i-1], weeks[i-2], etc. - Previous weeks (if i > 0)
+            // - weeks[i+1], weeks[i+2], etc. - Future weeks (if i < weeks.len()-1)
+
+            // Example skeleton logic (commented out - replace with your own):
+            if i > 0 {
+                let previous_km = *weeks[i - 1].1;
+
+                // Example 1: Detect high volume spike (>10% increase)
+                let spike_threshold = previous_km * 1.10;
+                let min_mileage = 20.0;
+                if current_km > spike_threshold && current_km > min_mileage {
+                    risks.push(InjuryRiskType::HighVolumeSpike.to_string());
+                }
+            }
+
+            /*
+            // Example 3: Check for multiple consecutive high-volume weeks
+            if i >= 2 {
+                let two_weeks_ago_km = *weeks[i - 2].1;
+                let previous_km = *weeks[i - 1].1;
+                let threshold = 45.0;
+
+                if two_weeks_ago_km > threshold && previous_km > threshold && current_km > threshold {
+                    // risks.push("CONSECUTIVE_HIGH_VOLUME".to_string());
+                }
+            }
+            */
+
+            // Only create RiskyWeek entry if risks were detected
+            if !risks.is_empty() {
+                risky_weeks.push(RiskyWeek {
+                    week: current_week.clone(),
+                    risk_count: risks.len(),
+                    risks,
+                });
+            }
+        }
+
+        risky_weeks
+    }
+
     pub async fn get_all_athletes_training_data(&self) -> Result<AllAthletesTrainingData, ApiError> {
         // Fetch all athletes from database
         let athletes = self.db.read_all_athletes().await?;
@@ -332,6 +411,9 @@ impl ActivityController {
                 .cloned()
                 .unwrap_or_else(HashMap::new);
 
+            // Analyze injury risks for this athlete
+            let risky_weeks = self.analyze_injury_risks(&weekly_kilometers);
+
             result.push(AthleteTrainingData {
                 id: athlete.id,
                 name: athlete.name,
@@ -339,6 +421,7 @@ impl ActivityController {
                 event: athlete.event,
                 training_data: AthleteWeeklyData {
                     weekly_kilometers,
+                    risky_weeks,
                 },
             });
         }
