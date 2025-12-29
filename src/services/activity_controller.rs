@@ -268,16 +268,6 @@ impl ActivityController {
         Ok(result)
     }
 
-    /// Analyze training volume patterns to detect injury risks
-    ///
-    /// This skeleton function provides the structure for week-over-week analysis.
-    /// TODO: Implement custom injury detection algorithms based on your requirements.
-    ///
-    /// # Arguments
-    /// * `weekly_kilometers` - HashMap of week start dates to total kilometers
-    ///
-    /// # Returns
-    /// Vector of RiskyWeek entries (only weeks with detected risks)
     fn analyze_injury_risks(&self, weekly_kilometers: &HashMap<String, f64>) -> Vec<RiskyWeek> {
         // Sort weeks chronologically for time-series analysis
         let mut weeks: Vec<(&String, &f64)> = weekly_kilometers.iter().collect();
@@ -292,23 +282,6 @@ impl ActivityController {
 
             let mut risks: Vec<String> = Vec::new();
 
-            // ==========================================
-            // TODO: IMPLEMENT INJURY DETECTION ALGORITHMS HERE
-            // ==========================================
-            //
-            // Example checks you might implement:
-            // 1. Volume spike detection (e.g., >10% increase week-over-week)
-            // 2. Insufficient recovery (high volume followed by high volume)
-            // 3. Overtraining patterns (multiple consecutive high-volume weeks)
-            // 4. Sudden mileage drops (potential injury indicator)
-            // 5. Rapid volume increases over multiple weeks
-            //
-            // You have access to:
-            // - current_week: &String - ISO date of current week (YYYY-MM-DD)
-            // - current_km: f64 - Kilometers for current week
-            // - weeks[i-1], weeks[i-2], etc. - Previous weeks (if i > 0)
-            // - weeks[i+1], weeks[i+2], etc. - Future weeks (if i < weeks.len()-1)
-
             // Example skeleton logic (commented out - replace with your own):
             if i > 0 {
                 let previous_km = *weeks[i - 1].1;
@@ -320,20 +293,7 @@ impl ActivityController {
                     risks.push(InjuryRiskType::HighVolumeSpike.to_string());
                 }
             }
-
-            /*
-            // Example 3: Check for multiple consecutive high-volume weeks
-            if i >= 2 {
-                let two_weeks_ago_km = *weeks[i - 2].1;
-                let previous_km = *weeks[i - 1].1;
-                let threshold = 45.0;
-
-                if two_weeks_ago_km > threshold && previous_km > threshold && current_km > threshold {
-                    // risks.push("CONSECUTIVE_HIGH_VOLUME".to_string());
-                }
-            }
-            */
-
+            
             // Only create RiskyWeek entry if risks were detected
             if !risks.is_empty() {
                 risky_weeks.push(RiskyWeek {
