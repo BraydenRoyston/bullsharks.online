@@ -358,6 +358,7 @@ impl ActivityController {
                 let min_mileage = 20.0;
                 if current_km > spike_threshold && current_km > min_mileage {
                     risky_week.risks.push(InjuryRiskType::HighVolumeSpike.to_string());
+                    risky_week.risk_count += 1;
                 }
             }
 
