@@ -7,8 +7,19 @@ pub enum InjuryRiskType {
     #[serde(rename = "HIGH_VOLUME_SPIKE")]
     HighVolumeSpike,
 
-    #[serde(rename = "SSRD_30")]
-    SSRD30
+    #[serde(rename = "SSRD30_NO_RISK")]
+    SSRD30NoRisk,
+
+    #[serde(rename = "SSRD30_SMALL_RISK")]
+    SSRD30SmallRisk,
+
+
+    #[serde(rename = "SSRD30_MODERATE_RISK")]
+    SSRD30ModerateRisk,
+
+    
+    #[serde(rename = "SSRD30_LARGE_RISK")]
+    SSRD30LargeRisk,
 }
 
 impl InjuryRiskType {
@@ -16,7 +27,10 @@ impl InjuryRiskType {
     pub fn as_str(&self) -> &str {
         match self {
             InjuryRiskType::HighVolumeSpike => "HIGH_VOLUME_SPIKE",
-            InjuryRiskType::SSRD30 => "SSRD30"
+            InjuryRiskType::SSRD30NoRisk => "SSRD30_NO_RISK",
+            InjuryRiskType::SSRD30SmallRisk => "SSRD30_SMALL_RISK",
+            InjuryRiskType::SSRD30ModerateRisk => "SSRD30_MODERATE_RISK",
+            InjuryRiskType::SSRD30LargeRisk => "SSRD30_LARGE_RISK",
         }
     }
 }

@@ -268,43 +268,109 @@ impl ActivityController {
         Ok(result)
     }
 
-    fn analyze_injury_risks(&self, weekly_kilometers: &HashMap<String, f64>) -> Vec<RiskyWeek> {
+    fn analyze_injury_risks(&self, athlete_name: String, weekly_kilometers: &HashMap<String, f64>, activities: &Vec<BullSharkActivity>) -> Vec<RiskyWeek> {
         // Sort weeks chronologically for time-series analysis
         let mut weeks: Vec<(&String, &f64)> = weekly_kilometers.iter().collect();
         weeks.sort_by_key(|(week, _)| *week);
 
-        let mut risky_weeks: Vec<RiskyWeek> = Vec::new();
+        let mut risky_weeks: HashMap<String, RiskyWeek> = HashMap::new();
+
+        // Iterate over activities for SSRD30 analysis
+        let mut max_ssrd30 = 0.0;
+        
+        for activity in activities {
+            // Guards
+            let activity_athlete_name= activity.athlete_name.clone().unwrap_or("".to_string());
+            if activity_athlete_name != athlete_name.to_string() {
+                continue;
+            }
+
+            let activity_type = activity.sport_type.clone().unwrap_or("".to_string());
+            if activity_type != "Run" {
+                continue;
+            }
+
+            // SSRD30 Analysis
+            let activity_distance = activity.distance.unwrap_or(0.0);
+            
+            if max_ssrd30 == 0.0 {
+                max_ssrd30 = activity_distance;
+                continue;
+            }
+
+            let growth_relative_to_max_ssrd30 = activity_distance / max_ssrd30 - 1.0;
+
+            let result = match growth_relative_to_max_ssrd30 {
+                n if n <= 0.1 => InjuryRiskType::SSRD30NoRisk,
+                n if n <= 0.3 => InjuryRiskType::SSRD30SmallRisk,
+                n if n <= 1.0 => InjuryRiskType::SSRD30ModerateRisk,
+                _ => InjuryRiskType::SSRD30LargeRisk,
+            };
+
+            if result != InjuryRiskType::SSRD30NoRisk {
+                let week_start_date = self.get_start_of_week_for_activity(activity);
+                let week_date_string = week_start_date.format("%Y-%m-%d").to_string();
+
+                let risky_week = risky_weeks.entry(week_date_string.clone()).or_insert_with(|| RiskyWeek {
+                    week: week_date_string.clone(),
+                    risk_count: 0,
+                    risks: Vec::new()
+                });
+
+                risky_week.risk_count += 1;
+                let risk_message = format!("{}: {:.1}km run on {} was risky based on historical MaxSSRD30 of {:.1}km.",
+                    result,
+                    activity.distance.unwrap_or(0.0) / 1000.0,
+                    activity.date.format("%Y-%m-%d"),
+                    max_ssrd30 / 1000.0,
+                );
+                risky_week.risks.push(risk_message);
+                
+                let copy_risky_week = RiskyWeek{
+                    week: risky_week.week.clone(),
+                    risk_count: risky_week.risk_count,
+                    risks: risky_week.risks.clone()
+                };
+
+                risky_weeks.insert(week_date_string.clone().to_string(), copy_risky_week);
+            }
+
+            max_ssrd30 = if max_ssrd30.total_cmp(&activity_distance).is_ge() { max_ssrd30 } else { activity_distance };
+        }
 
         // Iterate through weeks with sliding window for week-over-week analysis
         for i in 0..weeks.len() {
             let current_week = weeks[i].0;
-            let current_km = *weeks[i].1;
+            let current_km = *weeks[i].1;  
 
-            let mut risks: Vec<String> = Vec::new();
+            let week = current_week.to_string();
+            let risky_week = risky_weeks.entry(week.clone()).or_insert_with(|| RiskyWeek {
+                week: week.clone(),
+                risk_count: 0,
+                risks: Vec::new()
+            });
 
-            // Example skeleton logic (commented out - replace with your own):
             if i > 0 {
                 let previous_km = *weeks[i - 1].1;
 
-                // Example 1: Detect high volume spike (>10% increase)
+                // Detect high volume spike that violates the 10% rule 
                 let spike_threshold = previous_km * 1.10;
                 let min_mileage = 20.0;
                 if current_km > spike_threshold && current_km > min_mileage {
-                    risks.push(InjuryRiskType::HighVolumeSpike.to_string());
+                    risky_week.risks.push(InjuryRiskType::HighVolumeSpike.to_string());
                 }
             }
+
+            let copy_risky_week = RiskyWeek{
+                week: risky_week.week.clone(),
+                risk_count: risky_week.risk_count,
+                risks: risky_week.risks.clone()
+            };
             
-            // Only create RiskyWeek entry if risks were detected
-            if !risks.is_empty() {
-                risky_weeks.push(RiskyWeek {
-                    week: current_week.clone(),
-                    risk_count: risks.len(),
-                    risks,
-                });
-            }
+            risky_weeks.insert(week.clone(), copy_risky_week);
         }
 
-        risky_weeks
+        risky_weeks.into_values().filter(|entry| entry.risk_count != 0).collect()
     }
 
     pub async fn get_all_athletes_training_data(&self) -> Result<AllAthletesTrainingData, ApiError> {
@@ -322,9 +388,7 @@ impl ActivityController {
 
         // Create nested map: athlete_name -> (week_date_string -> kilometers)
         let mut athlete_weekly_km: HashMap<String, HashMap<String, f64>> = HashMap::new();
-
-        // Process each activity
-        for activity in activities {
+        for activity in &activities {
             // Filter for valid activities (sport_type == "Run")
             if !self.valid_activity(&activity) {
                 continue;
@@ -372,7 +436,7 @@ impl ActivityController {
                 .unwrap_or_else(HashMap::new);
 
             // Analyze injury risks for this athlete
-            let risky_weeks = self.analyze_injury_risks(&weekly_kilometers);
+            let risky_weeks = self.analyze_injury_risks(athlete_name, &weekly_kilometers, &activities);
 
             result.push(AthleteTrainingData {
                 id: athlete.id,
