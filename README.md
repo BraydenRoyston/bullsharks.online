@@ -4,6 +4,14 @@ A high-performance REST API server that aggregates and serves Strava activities 
 
 **Live API:** https://bullsharks-server-288102886042.us-central1.run.app
 
+## Build Status
+
+![CI Pipeline](https://github.com/bullsharks/bullsharks.online/workflows/CI%20Pipeline/badge.svg)
+![Security Scans](https://github.com/bullsharks/bullsharks.online/workflows/Security%20Scans/badge.svg)
+[![codecov](https://codecov.io/gh/bullsharks/bullsharks.online/branch/main/graph/badge.svg)](https://codecov.io/gh/bullsharks/bullsharks.online)
+
+> **Note:** Replace `bullsharks/bullsharks.online` with your actual GitHub repository path in the badge URLs above.
+
 ## Technologies Used
 
 - **[Rust](https://www.rust-lang.org/)** - Systems programming language for performance and safety

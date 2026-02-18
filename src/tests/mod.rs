@@ -5,3 +5,18 @@
 
 #[cfg(test)]
 pub mod injury_risk_tests;
+
+#[cfg(test)]
+pub mod activity_controller_tests;
+
+#[cfg(test)]
+pub mod api_tests;
+
+#[cfg(test)]
+pub mod model_tests;
+
+#[cfg(test)]
+pub mod error_tests;
+
+#[cfg(test)]
+pub mod utility_tests;
