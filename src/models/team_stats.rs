@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WeekData {
    #[serde(rename = "weekStart")] 
    pub week_start: DateTime<FixedOffset>,
@@ -16,7 +16,7 @@ pub struct WeekData {
 }
 
 // Response structures for get_team_stats
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TeamData {
     #[serde(rename = "athleteKilometers")]
     pub athlete_kilometers: HashMap<String, f64>,
