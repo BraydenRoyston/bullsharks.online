@@ -24,25 +24,23 @@ A high-performance REST API server that aggregates and serves Strava activities 
 - `dashmap` - Concurrent HashMap for caching
 - `dotenvy` - Environment variable management
 
-## Documentation
+## 📚 Documentation
 
-### 📚 [API Documentation](/docs/API_DOCUMENTATION.md)
+### For Contributors & AI Agents
+- **[🏠 Documentation Hub](/docs/README.md)** - Start here for complete documentation index
+- **[🤖 Agent Contribution Guide](/docs/AGENT_CONTRIBUTION_GUIDE.md)** - Essential guide for AI agents
+- **[🏗️ System Architecture](/docs/SYSTEM_ARCHITECTURE.md)** - High-level system design and data flow
+- **[📁 Code Organization](/docs/CODE_ORGANIZATION.md)** - Module structure and responsibilities
+- **[🗄️ Database Schema](/docs/DATABASE_SCHEMA.md)** - Data models and relationships
+- **[⚙️ Development Workflow](/docs/DEVELOPMENT_WORKFLOW.md)** - How to make changes safely
+- **[🧪 Testing Strategy](/docs/TESTING_STRATEGY.md)** - Testing approach and validation
+- **[🔧 Troubleshooting](/docs/TROUBLESHOOTING.md)** - Common issues and solutions
 
-Complete API reference for external clients:
-- Endpoint specifications
-- Request/response formats
-- Data models and schemas
-- Code examples (JavaScript, Python, cURL, React)
-- Error handling
+### For Users & Operations
+- **[📖 API Documentation](/docs/API_DOCUMENTATION.md)** - Complete API reference
+- **[🚀 DevOps Guide](/docs/DEVOPS.md)** - Operations and deployment guide
 
-### 🚀 [DevOps Documentation](/docs/DEVOPS.md)
-
-Operations guide for managing the deployed service:
-- Architecture overview
-- Deployment procedures
-- Monitoring and health checks
-- Debugging and troubleshooting
-- Cloud Run and Cloud Scheduler management
+> **💡 Living Documentation**: This documentation follows a "living documentation" approach—it's updated with every PR to reflect the actual state of the code, ensuring contributors (human and AI) always have accurate, up-to-date context.
 
 ## Quick Start
 
