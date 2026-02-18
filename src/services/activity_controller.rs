@@ -268,110 +268,141 @@ impl ActivityController {
         Ok(result)
     }
 
+    /// Comprehensive injury risk analysis using two validated algorithms
+    ///
+    /// **Algorithm Overview:**
+    /// 1. **SSRD30 (Session Specific Running Distance)**: Compares each run against the longest 
+    ///    run in the preceding 30 days. Flags activities with >10% increase as risky.
+    /// 2. **10% Rule**: Detects week-over-week training volume spikes >10% that exceed 20km/week
+    ///    minimum threshold.
+    ///
+    /// **Risk Classification:** No risk (<10%), small (10-30%), moderate (30-100%), large (>100%)
+    ///
+    /// **Output:** Returns only weeks with detected risks, grouped by week start date (Monday).
     fn analyze_injury_risks(&self, athlete_name: String, weekly_kilometers: &HashMap<String, f64>, activities: &Vec<BullSharkActivity>) -> Vec<RiskyWeek> {
-        // Sort weeks chronologically for time-series analysis
-        let mut weeks: Vec<(&String, &f64)> = weekly_kilometers.iter().collect();
-        weeks.sort_by_key(|(week, _)| *week);
-
         let mut risky_weeks: HashMap<String, RiskyWeek> = HashMap::new();
 
-        // Iterate over activities for SSRD30 analysis
-        let mut max_ssrd30 = 0.0;
-        
-        for activity in activities {
-            // Guards
-            let activity_athlete_name= activity.athlete_name.clone().unwrap_or("".to_string());
-            if activity_athlete_name != athlete_name.to_string() {
-                continue;
-            }
+        // SSRD30 Analysis: Analyze each activity against the longest run in the preceding 30 days
+        self.analyze_ssrd30_risks(&athlete_name, activities, &mut risky_weeks);
 
-            let activity_type = activity.sport_type.clone().unwrap_or("".to_string());
-            if activity_type != "Run" {
-                continue;
-            }
+        // 10% Rule Analysis: Check weekly volume increases
+        self.analyze_ten_percent_rule(&athlete_name, weekly_kilometers, &mut risky_weeks);
 
-            // SSRD30 Analysis
-            let activity_distance = activity.distance.unwrap_or(0.0);
+        // Return only weeks with risks detected
+        risky_weeks.into_values()
+            .filter(|entry| entry.risk_count > 0)
+            .collect()
+    }
+
+    /// SSRD30 Analysis: Session Specific Running Distance in last 30 days
+    /// For each activity, compare its distance against the longest run in the 30 days preceding it
+    fn analyze_ssrd30_risks(&self, athlete_name: &str, activities: &Vec<BullSharkActivity>, risky_weeks: &mut HashMap<String, RiskyWeek>) {
+        // Filter and sort activities chronologically for this athlete
+        let mut athlete_activities: Vec<&BullSharkActivity> = activities
+            .iter()
+            .filter(|activity| {
+                activity.athlete_name.as_deref() == Some(athlete_name) 
+                && activity.sport_type.as_deref() == Some("Run")
+                && activity.distance.is_some()
+            })
+            .collect();
+
+        // Sort by date (chronologically)
+        athlete_activities.sort_by_key(|activity| activity.date);
+
+        // For each activity, find max distance in preceding 30 days
+        for (i, current_activity) in athlete_activities.iter().enumerate() {
+            let current_distance = current_activity.distance.unwrap_or(0.0);
+            let current_date = current_activity.date;
             
-            if max_ssrd30 == 0.0 {
-                max_ssrd30 = activity_distance;
+            // Find maximum distance in the 30 days before this activity
+            let thirty_days_ago = current_date - Duration::days(30);
+            let max_distance_30d = athlete_activities
+                .iter()
+                .take(i) // Only consider activities before current one
+                .filter(|prev_activity| prev_activity.date >= thirty_days_ago)
+                .filter_map(|activity| activity.distance)
+                .fold(0.0_f64, |max, distance| max.max(distance));
+
+            // Skip if no prior activities in 30 days (no baseline to compare against)
+            if max_distance_30d == 0.0 {
                 continue;
             }
 
-            let growth_relative_to_max_ssrd30 = activity_distance / max_ssrd30 - 1.0;
+            // Calculate risk level based on percentage increase
+            let growth_ratio = current_distance / max_distance_30d;
+            let growth_percentage = growth_ratio - 1.0;
 
-            let result = match growth_relative_to_max_ssrd30 {
-                n if n <= 0.1 => InjuryRiskType::SSRD30NoRisk,
-                n if n <= 0.3 => InjuryRiskType::SSRD30SmallRisk,
-                n if n <= 1.0 => InjuryRiskType::SSRD30ModerateRisk,
+            let risk_type = match growth_percentage {
+                x if x < 0.1 + f64::EPSILON => InjuryRiskType::SSRD30NoRisk, // Account for floating point precision
+                x if x <= 0.3 => InjuryRiskType::SSRD30SmallRisk,
+                x if x <= 1.0 => InjuryRiskType::SSRD30ModerateRisk,
                 _ => InjuryRiskType::SSRD30LargeRisk,
             };
 
-            if result != InjuryRiskType::SSRD30NoRisk {
-                let week_start_date = self.get_start_of_week_for_activity(activity);
-                let week_date_string = week_start_date.format("%Y-%m-%d").to_string();
+            // Add risk if detected
+            if risk_type != InjuryRiskType::SSRD30NoRisk {
+                let week_start = self.get_start_of_week_for_activity(current_activity);
+                let week_string = week_start.format("%Y-%m-%d").to_string();
 
-                let risky_week = risky_weeks.entry(week_date_string.clone()).or_insert_with(|| RiskyWeek {
-                    week: week_date_string.clone(),
+                let risky_week = risky_weeks.entry(week_string.clone()).or_insert_with(|| RiskyWeek {
+                    week: week_string.clone(),
                     risk_count: 0,
-                    risks: Vec::new()
+                    risks: Vec::new(),
                 });
 
                 risky_week.risk_count += 1;
-                let risk_message = format!("{}: {:.1}km run on {} was risky based on historical MaxSSRD30 of {:.1}km.",
-                    result,
-                    activity.distance.unwrap_or(0.0) / 1000.0,
-                    activity.date.format("%Y-%m-%d"),
-                    max_ssrd30 / 1000.0,
+                let risk_message = format!(
+                    "{}: {:.1}km run on {} exceeded max distance in prior 30 days ({:.1}km) by {:.1}%",
+                    risk_type,
+                    current_distance / 1000.0,
+                    current_activity.date.format("%Y-%m-%d"),
+                    max_distance_30d / 1000.0,
+                    growth_percentage * 100.0
                 );
                 risky_week.risks.push(risk_message);
-                
-                let copy_risky_week = RiskyWeek{
-                    week: risky_week.week.clone(),
-                    risk_count: risky_week.risk_count,
-                    risks: risky_week.risks.clone()
-                };
-
-                risky_weeks.insert(week_date_string.clone().to_string(), copy_risky_week);
             }
-
-            max_ssrd30 = if max_ssrd30.total_cmp(&activity_distance).is_ge() { max_ssrd30 } else { activity_distance };
         }
+    }
 
-        // Iterate through weeks with sliding window for week-over-week analysis
-        for i in 0..weeks.len() {
-            let current_week = weeks[i].0;
-            let current_km = *weeks[i].1;  
+    /// 10% Rule Analysis: Check for week-over-week volume increases > 10%
+    fn analyze_ten_percent_rule(&self, _athlete_name: &str, weekly_kilometers: &HashMap<String, f64>, risky_weeks: &mut HashMap<String, RiskyWeek>) {
+        // Sort weeks chronologically using proper date parsing
+        let mut weeks: Vec<(&String, &f64)> = weekly_kilometers.iter().collect();
+        weeks.sort_by_key(|(week_str, _)| {
+            chrono::NaiveDate::parse_from_str(week_str, "%Y-%m-%d").unwrap_or_default()
+        });
 
-            let week = current_week.to_string();
-            let risky_week = risky_weeks.entry(week.clone()).or_insert_with(|| RiskyWeek {
-                week: week.clone(),
-                risk_count: 0,
-                risks: Vec::new()
-            });
+        // Configuration constants
+        const MIN_WEEKLY_KM_THRESHOLD: f64 = 20.0;
+        const SPIKE_THRESHOLD_MULTIPLIER: f64 = 1.10; // 10% increase
 
-            if i > 0 {
-                let previous_km = *weeks[i - 1].1;
+        // Check each week against the previous week
+        for window in weeks.windows(2) {
+            let (_prev_week, prev_km) = window[0];
+            let (current_week, current_km) = window[1];
 
-                // Detect high volume spike that violates the 10% rule 
-                let spike_threshold = previous_km * 1.10;
-                let min_mileage = 20.0;
-                if current_km > spike_threshold && current_km > min_mileage {
-                    risky_week.risks.push(InjuryRiskType::HighVolumeSpike.to_string());
-                    risky_week.risk_count += 1;
-                }
-            }
-
-            let copy_risky_week = RiskyWeek{
-                week: risky_week.week.clone(),
-                risk_count: risky_week.risk_count,
-                risks: risky_week.risks.clone()
-            };
+            let spike_threshold = prev_km * SPIKE_THRESHOLD_MULTIPLIER;
             
-            risky_weeks.insert(week.clone(), copy_risky_week);
-        }
+            if *current_km > spike_threshold && *current_km > MIN_WEEKLY_KM_THRESHOLD {
+                let risky_week = risky_weeks.entry(current_week.clone()).or_insert_with(|| RiskyWeek {
+                    week: current_week.clone(),
+                    risk_count: 0,
+                    risks: Vec::new(),
+                });
 
-        risky_weeks.into_values().filter(|entry| entry.risk_count != 0).collect()
+                risky_week.risk_count += 1;
+                let increase_percentage = (current_km / prev_km - 1.0) * 100.0;
+                let risk_message = format!(
+                    "{}: Weekly volume increased from {:.1}km to {:.1}km ({:.1}% increase exceeds 10% rule)",
+                    InjuryRiskType::HighVolumeSpike,
+                    prev_km,
+                    current_km,
+                    increase_percentage
+                );
+                risky_week.risks.push(risk_message);
+            }
+        }
     }
 
     pub async fn get_all_athletes_training_data(&self) -> Result<AllAthletesTrainingData, ApiError> {

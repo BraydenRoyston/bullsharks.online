@@ -8,6 +8,9 @@ mod services;
 mod models;
 mod utils;
 
+#[cfg(test)]
+mod tests;
+
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
