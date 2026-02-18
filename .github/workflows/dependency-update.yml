@@ -1,0 +1,64 @@
+name: Dependency Updates
+
+on:
+  schedule:
+    # Run weekly on Mondays at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  update-dependencies:
+    name: Update Dependencies
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install cargo-edit
+      run: cargo install cargo-edit
+
+    - name: Update dependencies
+      run: |
+        cargo update
+        
+    - name: Check for outdated dependencies
+      id: outdated
+      run: |
+        cargo install cargo-outdated
+        if cargo outdated --exit-code 1; then
+          echo "outdated=false" >> $GITHUB_OUTPUT
+        else
+          echo "outdated=true" >> $GITHUB_OUTPUT
+        fi
+      continue-on-error: true
+
+    - name: Create Pull Request
+      if: steps.outdated.outputs.outdated == 'true'
+      uses: peter-evans/create-pull-request@v6
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: 'chore: update Rust dependencies'
+        title: 'chore: Update Rust dependencies'
+        body: |
+          Automated dependency update created by GitHub Actions.
+          
+          This PR updates Rust dependencies to their latest compatible versions.
+          
+          Please review the changes and ensure all tests pass before merging.
+          
+          - [ ] Dependencies updated
+          - [ ] Tests pass
+          - [ ] No breaking changes introduced
+        branch: update-dependencies-${{ github.run_number }}
+        delete-branch: true
+        reviewers: |
+          # Add repository maintainers here
+        labels: |
+          dependencies
+          automated
