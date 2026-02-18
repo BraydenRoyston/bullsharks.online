@@ -1,19 +1,66 @@
 [package]
-name = "server"
+name = "bullsharks-server"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+authors = ["BullSharks Running Club"]
+description = "REST API server for Bulls vs Sharks running club activity data aggregation"
+repository = "https://github.com/BraydenRoyston/bullsharks.online"
+license = "MIT"
+keywords = ["strava", "running", "api", "rust", "axum"]
+categories = ["web-programming::http-server"]
 
 [dependencies]
+# Web framework & async runtime
 axum = "0.7"
 tokio = { version = "1", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# Serialization & HTTP client
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-reqwest = { version = "0.12", features = ["json"]}
-dotenvy = "0.15"
-chrono = { version = "0.4", features = ["serde"]}
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Database & data handling
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "chrono", "tls-rustls", "uuid"] }
+uuid = { version = "1.19.0", features = ["v4", "serde"] }
+
+# Date/time handling
+chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.10"
+
+# Utilities
+dotenvy = "0.15"
 sha2 = "0.10"
-tokio-cron-scheduler = "0.10"
-sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "chrono", "tls-rustls"] }
 dashmap = "6.0"
-uuid = { version = "1.19.0", features = [ "v4" ]}
+
+# Scheduling
+tokio-cron-scheduler = "0.10"
+
+# Logging & tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+# Testing utilities
+tokio-test = "0.4"
+mockall = "0.13"
+wiremock = "0.6"
+tempfile = "3.10"
+
+# Property-based testing
+proptest = "1.5"
+
+[profile.release]
+# Optimize for performance in production
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+# Faster compilation in development
+debug = 1
+
+[[bin]]
+name = "server"
+path = "src/main.rs"

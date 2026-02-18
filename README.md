@@ -1,8 +1,11 @@
-# BullSharks.online Server
+# 🏃‍♂️ BullSharks.online Server
 
-A high-performance REST API server that aggregates and serves Strava activities for the BullSharks running club. The server automatically syncs activities from the Strava Club API and provides endpoints for retrieving activity data, team statistics, and athlete information.
+> **High-performance REST API for Bulls vs Sharks running club data aggregation**
 
-**Live API:** https://bullsharks-server-288102886042.us-central1.run.app
+Automatically syncs and serves Strava activities with advanced features including injury risk analysis, team statistics, and athlete performance tracking.
+
+**🌐 Live API:** https://bullsharks-server-288102886042.us-central1.run.app  
+**📊 Features:** Activity aggregation • Team stats • Injury risk analysis • OAuth integration
 
 ## Technologies Used
 
