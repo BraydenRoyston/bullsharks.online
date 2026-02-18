@@ -3,7 +3,7 @@ use sqlx::Row;
 
 /// Helper to map a database row to StravaAuthToken
 pub fn map_row_to_token(row: sqlx::postgres::PgRow) -> StravaAuthToken {
-      // Import Row trait for .get()
+    // Import Row trait for .get()
 
     StravaAuthToken {
         id: row.get("id"),
