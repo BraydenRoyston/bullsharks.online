@@ -102,7 +102,7 @@ jobs:
       run: cargo test --verbose --test '*'
 
     - name: Run all tests in src/tests directory
-      run: cargo test --verbose tests::
+      run: "cargo test --verbose tests::"
 
   security-audit:
     name: Security Audit
