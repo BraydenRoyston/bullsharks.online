@@ -1,21 +1,31 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{error::ApiError, models::{athlete::Athlete, athlete_training_data::{AllAthletesTrainingData, AthleteTrainingData, AthleteWeeklyData, RiskyWeek}, bullshark::BullSharkActivity, club::ClubActivity, injury_risk::InjuryRiskType, team_stats::{TeamData, TeamStats, WeekData}}, services::{database::Database, strava_client::StravaClient}};
+use crate::{
+    error::ApiError,
+    models::{
+        athlete::Athlete,
+        athlete_training_data::{
+            AllAthletesTrainingData, AthleteTrainingData, AthleteWeeklyData, RiskyWeek,
+        },
+        bullshark::BullSharkActivity,
+        club::ClubActivity,
+        injury_risk::InjuryRiskType,
+        team_stats::{TeamData, TeamStats, WeekData},
+    },
+    services::{database::Database, strava_client::StravaClient},
+};
 use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDateTime, Offset, TimeZone, Utc};
 use chrono_tz::America::Los_Angeles;
 use sha2::{Digest, Sha256};
 
 pub struct ActivityController {
     db: Arc<Database>,
-    strava_client: StravaClient, 
+    strava_client: StravaClient,
 }
 
 impl ActivityController {
     pub fn new(db: Arc<Database>, strava_client: StravaClient) -> Self {
-        ActivityController { 
-            db,
-            strava_client
-        }
+        ActivityController { db, strava_client }
     }
 
     pub async fn populate_new_activities(&self) -> Result<(), ApiError> {
@@ -29,7 +39,10 @@ impl ActivityController {
         Ok(())
     }
 
-    pub fn convert_activities(&self, club_activities: &[ClubActivity]) -> Result<Vec<BullSharkActivity>, ApiError> {
+    pub fn convert_activities(
+        &self,
+        club_activities: &[ClubActivity],
+    ) -> Result<Vec<BullSharkActivity>, ApiError> {
         // Get current UTC time and convert to FixedOffset for model compatibility
         let batch_time = Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap());
 
@@ -39,11 +52,18 @@ impl ActivityController {
             .collect()
     }
 
-    pub fn convert_activity_to_bullshark_activity(&self, club_activity: &ClubActivity, time: DateTime<FixedOffset>) -> Result<BullSharkActivity, ApiError> {
+    pub fn convert_activity_to_bullshark_activity(
+        &self,
+        club_activity: &ClubActivity,
+        time: DateTime<FixedOffset>,
+    ) -> Result<BullSharkActivity, ApiError> {
         let hash = self.create_hash_for_activity(club_activity)?;
-        let athlete = club_activity.athlete
+        let athlete = club_activity
+            .athlete
             .as_ref()
-            .ok_or(ApiError::ExternalAPIError("Strava athlete did not contain first/last name".to_string()))?;
+            .ok_or(ApiError::ExternalAPIError(
+                "Strava athlete did not contain first/last name".to_string(),
+            ))?;
         let athlete_name = format!(
             "{} {}",
             athlete.first_name.as_deref().unwrap_or("Unknown"),
@@ -52,7 +72,7 @@ impl ActivityController {
 
         Ok(BullSharkActivity {
             id: hash,
-            date: time, 
+            date: time,
             athlete_name: Some(athlete_name),
             resource_state: club_activity.resource_state,
             name: club_activity.name.clone(),
@@ -62,40 +82,42 @@ impl ActivityController {
             total_elevation_gain: club_activity.total_elevation_gain,
             sport_type: club_activity.sport_type.clone(),
             workout_type: club_activity.workout_type,
-            device_name: club_activity.device_name.clone()
+            device_name: club_activity.device_name.clone(),
         })
     }
 
-    pub fn create_hash_for_activity(&self, club_activity: &ClubActivity) -> Result<String, ApiError> {
-        let athlete = club_activity.athlete
-          .as_ref()
-          .ok_or_else(|| ApiError::InternalConversionError("Activity missing athlete".to_string()))?;
+    pub fn create_hash_for_activity(
+        &self,
+        club_activity: &ClubActivity,
+    ) -> Result<String, ApiError> {
+        let athlete = club_activity.athlete.as_ref().ok_or_else(|| {
+            ApiError::InternalConversionError("Activity missing athlete".to_string())
+        })?;
 
-      let first_name = athlete.first_name
-          .as_ref()
-          .ok_or_else(|| ApiError::InternalConversionError("Athlete missing first name".to_string()))?;
+        let first_name = athlete.first_name.as_ref().ok_or_else(|| {
+            ApiError::InternalConversionError("Athlete missing first name".to_string())
+        })?;
 
-      let last_name = athlete.last_name
-          .as_ref()
-          .ok_or_else(|| ApiError::InternalConversionError("Athlete missing last name".to_string()))?;
+        let last_name = athlete.last_name.as_ref().ok_or_else(|| {
+            ApiError::InternalConversionError("Athlete missing last name".to_string())
+        })?;
 
-      let distance = club_activity.distance
-          .ok_or_else(|| ApiError::InternalConversionError("Activity missing distance".to_string()))?;
+        let distance = club_activity.distance.ok_or_else(|| {
+            ApiError::InternalConversionError("Activity missing distance".to_string())
+        })?;
 
-      let moving_time = club_activity.moving_time
-          .ok_or_else(|| ApiError::InternalConversionError("Activity missing moving time".to_string()))?;
+        let moving_time = club_activity.moving_time.ok_or_else(|| {
+            ApiError::InternalConversionError("Activity missing moving time".to_string())
+        })?;
 
-      let elapsed_time = club_activity.elapsed_time
-          .ok_or_else(|| ApiError::InternalConversionError("Activity missing elapsed time".to_string()))?;
+        let elapsed_time = club_activity.elapsed_time.ok_or_else(|| {
+            ApiError::InternalConversionError("Activity missing elapsed time".to_string())
+        })?;
 
-      let composite = format!(
-          "{}|{}|{}|{}|{}",
-          first_name,
-          last_name,
-          distance,
-          moving_time,
-          elapsed_time
-      );
+        let composite = format!(
+            "{}|{}|{}|{}|{}",
+            first_name, last_name, distance, moving_time, elapsed_time
+        );
 
         let mut hasher = Sha256::new();
         hasher.update(composite.as_bytes());
@@ -111,9 +133,15 @@ impl ActivityController {
         let athlete_teams = self.build_athlete_team_map().await?;
         let (start_date, end_date) = self.get_team_stat_dates()?;
 
-        println!("[ACTIVITY_CONTROLLER]: getting team stats from {} to {}", start_date, end_date);
+        println!(
+            "[ACTIVITY_CONTROLLER]: getting team stats from {} to {}",
+            start_date, end_date
+        );
 
-        let activities = self.db.get_activities_from_window(start_date, end_date).await?;
+        let activities = self
+            .db
+            .get_activities_from_window(start_date, end_date)
+            .await?;
 
         let mut bulls_athlete_kilometers: HashMap<String, f64> = HashMap::new();
         let mut bulls_week_data: HashMap<NaiveDateTime, WeekData> = HashMap::new();
@@ -152,7 +180,9 @@ impl ActivityController {
                 _ => continue,
             };
             // update athlete hashmap
-            *athlete_kilometers.entry(athlete_name.clone()).or_insert(0.0) += distance_kilometers;
+            *athlete_kilometers
+                .entry(athlete_name.clone())
+                .or_insert(0.0) += distance_kilometers;
 
             let start_of_week = self.get_start_of_week_for_activity(&activity);
 
@@ -163,22 +193,32 @@ impl ActivityController {
                 _ => continue,
             };
 
-            let pacific_dt = Los_Angeles.from_local_datetime(&start_of_week).single()
-                .ok_or_else(|| ApiError::InternalConversionError(format!("Invalid datetime conversion for week start: {}", start_of_week)))?;
+            let pacific_dt = Los_Angeles
+                .from_local_datetime(&start_of_week)
+                .single()
+                .ok_or_else(|| {
+                    ApiError::InternalConversionError(format!(
+                        "Invalid datetime conversion for week start: {}",
+                        start_of_week
+                    ))
+                })?;
             let week_start = pacific_dt.with_timezone(&pacific_dt.offset().fix());
 
-            let week_data = weekly_kilometers.entry(start_of_week).or_insert(WeekData { 
-                week_start: week_start, 
-                weekly_team_kilometers: 0.0, 
-                weekly_running_sum: 0.0, 
-                weekly_athlete_kilometers: HashMap::new() 
+            let week_data = weekly_kilometers.entry(start_of_week).or_insert(WeekData {
+                week_start,
+                weekly_team_kilometers: 0.0,
+                weekly_running_sum: 0.0,
+                weekly_athlete_kilometers: HashMap::new(),
             });
 
             week_data.weekly_team_kilometers += distance_kilometers;
-            *week_data.weekly_athlete_kilometers.entry(athlete_name.to_string()).or_insert(0.0) += distance_kilometers;
+            *week_data
+                .weekly_athlete_kilometers
+                .entry(athlete_name.to_string())
+                .or_insert(0.0) += distance_kilometers;
         }
 
-        // Convert to vec, compute running sums, sort entries, etc. 
+        // Convert to vec, compute running sums, sort entries, etc.
         let bulls_weekly_vec = self.convert_weekly_map_to_vec(bulls_week_data)?;
         let sharks_weekly_vec = self.convert_weekly_map_to_vec(sharks_week_data)?;
 
@@ -203,9 +243,9 @@ impl ActivityController {
                 return false;
             }
         } else {
-            return false; 
+            return false;
         }
-        return true;
+        true
     }
 
     pub async fn build_athlete_team_map(&self) -> Result<HashMap<String, String>, ApiError> {
@@ -224,8 +264,12 @@ impl ActivityController {
             .ok_or_else(|| ApiError::InternalConversionError("Invalid start date".to_string()))?
             .and_hms_opt(0, 0, 0)
             .ok_or_else(|| ApiError::InternalConversionError("Invalid start time".to_string()))?;
-        let start_date_pacific = Los_Angeles.from_local_datetime(&start_date_naive).single()
-            .ok_or_else(|| ApiError::InternalConversionError("Invalid start date time".to_string()))?;
+        let start_date_pacific = Los_Angeles
+            .from_local_datetime(&start_date_naive)
+            .single()
+            .ok_or_else(|| {
+                ApiError::InternalConversionError("Invalid start date time".to_string())
+            })?;
         let start_date_utc = start_date_pacific.with_timezone(&Utc);
 
         let end_date_utc = Utc::now();
@@ -237,14 +281,15 @@ impl ActivityController {
         let activity_date = activity.date;
         let activity_date_naive = activity_date.naive_local();
         let days_since_monday = activity_date_naive.weekday().num_days_from_monday();
-        let start_of_week = activity_date_naive.date()
-            .and_hms_opt(0, 0, 0)
-            .unwrap()
+        let start_of_week = activity_date_naive.date().and_hms_opt(0, 0, 0).unwrap()
             - Duration::days(days_since_monday as i64);
         start_of_week
     }
 
-    fn convert_weekly_map_to_vec(&self, weekly_map: HashMap<NaiveDateTime, WeekData>) -> Result<Vec<WeekData>, ApiError> {
+    fn convert_weekly_map_to_vec(
+        &self,
+        weekly_map: HashMap<NaiveDateTime, WeekData>,
+    ) -> Result<Vec<WeekData>, ApiError> {
         let mut running_sum: f64 = 0.0;
         let mut weekly_vec: Vec<(NaiveDateTime, WeekData)> = weekly_map
             .into_iter()
@@ -271,7 +316,7 @@ impl ActivityController {
     /// Comprehensive injury risk analysis using two validated algorithms
     ///
     /// **Algorithm Overview:**
-    /// 1. **SSRD30 (Session Specific Running Distance)**: Compares each run against the longest 
+    /// 1. **SSRD30 (Session Specific Running Distance)**: Compares each run against the longest
     ///    run in the preceding 30 days. Flags activities with >10% increase as risky.
     /// 2. **10% Rule**: Detects week-over-week training volume spikes >10% that exceed 20km/week
     ///    minimum threshold.
@@ -279,7 +324,12 @@ impl ActivityController {
     /// **Risk Classification:** No risk (<10%), small (10-30%), moderate (30-100%), large (>100%)
     ///
     /// **Output:** Returns only weeks with detected risks, grouped by week start date (Monday).
-    fn analyze_injury_risks(&self, athlete_name: String, weekly_kilometers: &HashMap<String, f64>, activities: &Vec<BullSharkActivity>) -> Vec<RiskyWeek> {
+    fn analyze_injury_risks(
+        &self,
+        athlete_name: String,
+        weekly_kilometers: &HashMap<String, f64>,
+        activities: &Vec<BullSharkActivity>,
+    ) -> Vec<RiskyWeek> {
         let mut risky_weeks: HashMap<String, RiskyWeek> = HashMap::new();
 
         // SSRD30 Analysis: Analyze each activity against the longest run in the preceding 30 days
@@ -289,21 +339,27 @@ impl ActivityController {
         self.analyze_ten_percent_rule(&athlete_name, weekly_kilometers, &mut risky_weeks);
 
         // Return only weeks with risks detected
-        risky_weeks.into_values()
+        risky_weeks
+            .into_values()
             .filter(|entry| entry.risk_count > 0)
             .collect()
     }
 
     /// SSRD30 Analysis: Session Specific Running Distance in last 30 days
     /// For each activity, compare its distance against the longest run in the 30 days preceding it
-    fn analyze_ssrd30_risks(&self, athlete_name: &str, activities: &Vec<BullSharkActivity>, risky_weeks: &mut HashMap<String, RiskyWeek>) {
+    fn analyze_ssrd30_risks(
+        &self,
+        athlete_name: &str,
+        activities: &Vec<BullSharkActivity>,
+        risky_weeks: &mut HashMap<String, RiskyWeek>,
+    ) {
         // Filter and sort activities chronologically for this athlete
         let mut athlete_activities: Vec<&BullSharkActivity> = activities
             .iter()
             .filter(|activity| {
-                activity.athlete_name.as_deref() == Some(athlete_name) 
-                && activity.sport_type.as_deref() == Some("Run")
-                && activity.distance.is_some()
+                activity.athlete_name.as_deref() == Some(athlete_name)
+                    && activity.sport_type.as_deref() == Some("Run")
+                    && activity.distance.is_some()
             })
             .collect();
 
@@ -314,7 +370,7 @@ impl ActivityController {
         for (i, current_activity) in athlete_activities.iter().enumerate() {
             let current_distance = current_activity.distance.unwrap_or(0.0);
             let current_date = current_activity.date;
-            
+
             // Find maximum distance in the 30 days before this activity
             let thirty_days_ago = current_date - Duration::days(30);
             let max_distance_30d = athlete_activities
@@ -345,11 +401,14 @@ impl ActivityController {
                 let week_start = self.get_start_of_week_for_activity(current_activity);
                 let week_string = week_start.format("%Y-%m-%d").to_string();
 
-                let risky_week = risky_weeks.entry(week_string.clone()).or_insert_with(|| RiskyWeek {
-                    week: week_string.clone(),
-                    risk_count: 0,
-                    risks: Vec::new(),
-                });
+                let risky_week =
+                    risky_weeks
+                        .entry(week_string.clone())
+                        .or_insert_with(|| RiskyWeek {
+                            week: week_string.clone(),
+                            risk_count: 0,
+                            risks: Vec::new(),
+                        });
 
                 risky_week.risk_count += 1;
                 let risk_message = format!(
@@ -366,7 +425,12 @@ impl ActivityController {
     }
 
     /// 10% Rule Analysis: Check for week-over-week volume increases > 10%
-    fn analyze_ten_percent_rule(&self, _athlete_name: &str, weekly_kilometers: &HashMap<String, f64>, risky_weeks: &mut HashMap<String, RiskyWeek>) {
+    fn analyze_ten_percent_rule(
+        &self,
+        _athlete_name: &str,
+        weekly_kilometers: &HashMap<String, f64>,
+        risky_weeks: &mut HashMap<String, RiskyWeek>,
+    ) {
         // Sort weeks chronologically using proper date parsing
         let mut weeks: Vec<(&String, &f64)> = weekly_kilometers.iter().collect();
         weeks.sort_by_key(|(week_str, _)| {
@@ -383,13 +447,16 @@ impl ActivityController {
             let (current_week, current_km) = window[1];
 
             let spike_threshold = prev_km * SPIKE_THRESHOLD_MULTIPLIER;
-            
+
             if *current_km > spike_threshold && *current_km > MIN_WEEKLY_KM_THRESHOLD {
-                let risky_week = risky_weeks.entry(current_week.clone()).or_insert_with(|| RiskyWeek {
-                    week: current_week.clone(),
-                    risk_count: 0,
-                    risks: Vec::new(),
-                });
+                let risky_week =
+                    risky_weeks
+                        .entry(current_week.clone())
+                        .or_insert_with(|| RiskyWeek {
+                            week: current_week.clone(),
+                            risk_count: 0,
+                            risks: Vec::new(),
+                        });
 
                 risky_week.risk_count += 1;
                 let increase_percentage = (current_km / prev_km - 1.0) * 100.0;
@@ -405,7 +472,9 @@ impl ActivityController {
         }
     }
 
-    pub async fn get_all_athletes_training_data(&self) -> Result<AllAthletesTrainingData, ApiError> {
+    pub async fn get_all_athletes_training_data(
+        &self,
+    ) -> Result<AllAthletesTrainingData, ApiError> {
         // Fetch all athletes from database
         let athletes = self.db.read_all_athletes().await?;
 
@@ -468,7 +537,8 @@ impl ActivityController {
                 .unwrap_or_else(HashMap::new);
 
             // Analyze injury risks for this athlete
-            let risky_weeks = self.analyze_injury_risks(athlete_name, &weekly_kilometers, &activities);
+            let risky_weeks =
+                self.analyze_injury_risks(athlete_name, &weekly_kilometers, &activities);
 
             result.push(AthleteTrainingData {
                 id: athlete.id,
@@ -485,9 +555,6 @@ impl ActivityController {
         // Sort by athlete name for consistent ordering
         result.sort_by(|a, b| a.name.cmp(&b.name));
 
-        Ok(AllAthletesTrainingData {
-            athletes: result,
-        })
+        Ok(AllAthletesTrainingData { athletes: result })
     }
-
 }
