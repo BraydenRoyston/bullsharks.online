@@ -1,4 +1,3 @@
-
 /*
 These are external models defined by Strava.
 */
@@ -8,15 +7,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StravaAuthToken {
     pub id: String,
-    pub token_type: String, 
+    pub token_type: String,
     pub access_token: String,
-    pub expires_at: i64,  
-    pub expires_in: i32, 
+    pub expires_at: i64,
+    pub expires_in: i32,
     pub refresh_token: String,
 }
 
 impl StravaAuthToken {
-    pub fn new(id: String, response: StravaTokenResponse) -> Self {          
+    pub fn new(id: String, response: StravaTokenResponse) -> Self {
         StravaAuthToken {
             id,
             token_type: response.token_type,
@@ -36,7 +35,7 @@ impl StravaAuthToken {
     /// Check if token expires soon (within 5 minutes)
     pub fn expires_soon(&self) -> bool {
         let now = chrono::Utc::now().timestamp();
-        self.expires_at - now < 300  // 5 minutes
+        self.expires_at - now < 300 // 5 minutes
     }
 }
 

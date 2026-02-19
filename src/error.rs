@@ -2,14 +2,8 @@
 error.rs
 */
 
-use axum::{
-    Json,
-    http::StatusCode, 
-    response::IntoResponse, 
-};
-use serde_json::{
-    json,
-};
+use axum::{Json, http::StatusCode, response::IntoResponse};
+use serde_json::json;
 
 #[derive(Debug)]
 pub enum ApiError {
@@ -30,34 +24,13 @@ from our handlers.
 impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
         let (status, error_message) = match self {
-            ApiError::StartupError(msg) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                msg
-            ),
-            ApiError::DatabaseError(msg) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                msg
-            ),
-            ApiError::InternalConversionError(msg) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                msg
-            ),
-            ApiError::AuthTokenError(msg) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                msg
-            ),
-            ApiError::ExternalAPIError(msg) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                msg
-            ),
-            ApiError::Unauthorized(msg) => (
-                StatusCode::UNAUTHORIZED,
-                msg
-            ),
-            ApiError::BadRequest(msg) => (
-                StatusCode::BAD_REQUEST,
-                msg
-            ),
+            ApiError::StartupError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
+            ApiError::DatabaseError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
+            ApiError::InternalConversionError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
+            ApiError::AuthTokenError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
+            ApiError::ExternalAPIError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
+            ApiError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg),
+            ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
         };
 
         let body = Json(json!({
