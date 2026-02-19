@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use crate::utils::startup_utils;
 
-mod error;
 mod api;
-mod services;
+mod error;
 mod models;
+mod services;
 mod utils;
 
 #[cfg(test)]
@@ -22,7 +22,7 @@ async fn main() {
     // Create ActivityController instead of starting scheduler
     let activity_controller = Arc::new(startup_utils::get_activity_controller(
         Arc::clone(&db),
-        strava_client
+        strava_client,
     ));
 
     // Pass both db and activity_controller to the server

@@ -274,14 +274,29 @@ async fn cleanup_test_data(db: &Database) {
 ## 📊 Current Test Coverage
 
 ### Injury Risk Tests (`injury_risk_tests.rs`)
-- ✅ **SSRD30 No Risk** - 10% increase threshold
-- ✅ **SSRD30 Small Risk** - 25% increase scenario  
-- ✅ **SSRD30 Moderate Risk** - 80% increase scenario
-- ✅ **SSRD30 Large Risk** - 150% increase scenario
-- ✅ **30-Day Window** - Proper lookback validation
-- ✅ **10% Rule Calculation** - Week-over-week spike detection
-- ✅ **Risk Classification** - Boundary condition testing
-- ✅ **String Conversion** - Risk type serialization
+
+**SSRD30 Algorithm (Session Specific Running Distance — 30 days)**
+- ✅ **No Risk** - 10% increase at threshold → no flag
+- ✅ **Small Risk** - 25% increase scenario
+- ✅ **Moderate Risk** - 80% increase scenario
+- ✅ **Large Risk** - 150% increase scenario
+- ✅ **30-Day Window** - Excludes runs older than 30 days; uses closest prior run as baseline
+- ✅ **First Run / No Baseline** - Single run with no prior history → no flag (no baseline to compare)
+- ✅ **All Prior Runs Outside Window** - No run in 30-day window → no flag
+- ✅ **Multiple Athlete Isolation** - Each athlete's history is independent; no cross-contamination
+- ✅ **Non-Run Activities Excluded** - Cycling/other sport_types ignored in baseline calculation
+
+**10% Rule (Week-over-Week Volume Spike)**
+- ✅ **Math Validation** - Spike threshold and percentage calculation correctness
+- ✅ **Single Week** - Only one week of data → no comparison possible → no flag
+- ✅ **Below 20 km Threshold** - Large % increase but volume < 20 km → no flag (protects beginners)
+- ✅ **Within 10% Threshold** - ~9% increase → no flag
+- ✅ **Triggers Above Threshold** - 40% increase above 20 km → HIGH_VOLUME_SPIKE with correct message
+- ✅ **Only Spike Week Flagged** - Subsequent decrease after spike does not produce false positive
+
+**Risk Type**
+- ✅ **Classification** - Boundary condition testing for all four SSRD30 categories
+- ✅ **String Conversion** - as_str() serialization for all risk types
 
 ### Areas Needing Coverage
 - [ ] **Team Statistics** - Bulls vs Sharks calculations
