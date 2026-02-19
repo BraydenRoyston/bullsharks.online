@@ -1,11 +1,11 @@
-use crate::models::bullshark::BullSharkActivity;
 use crate::models::athlete_training_data::RiskyWeek;
+use crate::models::bullshark::BullSharkActivity;
 use crate::models::injury_risk::InjuryRiskType;
 use chrono::{Datelike, Duration, FixedOffset, NaiveDate, TimeZone};
 use std::collections::HashMap;
 
 /// Comprehensive test suite for injury risk algorithms (SSRD30 & 10% Rule)
-/// 
+///
 /// Tests cover:
 /// - SSRD30 risk classification (no, small, moderate, large risk scenarios)
 /// - 30-day lookback window validation
@@ -14,11 +14,7 @@ use std::collections::HashMap;
 /// - Floating point precision edge cases
 
 // Helper function to create a test activity
-fn create_test_activity(
-    date_str: &str,
-    athlete_name: &str,
-    distance_km: f64,
-) -> BullSharkActivity {
+fn create_test_activity(date_str: &str, athlete_name: &str, distance_km: f64) -> BullSharkActivity {
     let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
         .unwrap()
         .and_hms_opt(10, 0, 0)
@@ -43,14 +39,17 @@ fn create_test_activity(
 }
 
 // Helper to test SSRD30 logic without full ActivityController setup
-fn analyze_ssrd30_test(athlete_name: &str, activities: &[BullSharkActivity]) -> HashMap<String, RiskyWeek> {
+fn analyze_ssrd30_test(
+    athlete_name: &str,
+    activities: &[BullSharkActivity],
+) -> HashMap<String, RiskyWeek> {
     // Filter and sort activities chronologically for this athlete
     let mut athlete_activities: Vec<&BullSharkActivity> = activities
         .iter()
         .filter(|activity| {
-            activity.athlete_name.as_deref() == Some(athlete_name) 
-            && activity.sport_type.as_deref() == Some("Run")
-            && activity.distance.is_some()
+            activity.athlete_name.as_deref() == Some(athlete_name)
+                && activity.sport_type.as_deref() == Some("Run")
+                && activity.distance.is_some()
         })
         .collect();
 
@@ -62,7 +61,7 @@ fn analyze_ssrd30_test(athlete_name: &str, activities: &[BullSharkActivity]) -> 
     for (i, current_activity) in athlete_activities.iter().enumerate() {
         let current_distance = current_activity.distance.unwrap_or(0.0);
         let current_date = current_activity.date;
-        
+
         let thirty_days_ago = current_date - Duration::days(30);
         let max_distance_30d = athlete_activities
             .iter()
@@ -89,17 +88,17 @@ fn analyze_ssrd30_test(athlete_name: &str, activities: &[BullSharkActivity]) -> 
             // Calculate week start for the activity
             let activity_date_naive = current_activity.date.naive_local();
             let days_since_monday = activity_date_naive.weekday().num_days_from_monday();
-            let start_of_week = activity_date_naive.date()
-                .and_hms_opt(0, 0, 0)
-                .unwrap()
+            let start_of_week = activity_date_naive.date().and_hms_opt(0, 0, 0).unwrap()
                 - Duration::days(days_since_monday as i64);
             let week_string = start_of_week.format("%Y-%m-%d").to_string();
 
-            let risky_week = risky_weeks.entry(week_string.clone()).or_insert_with(|| RiskyWeek {
-                week: week_string.clone(),
-                risk_count: 0,
-                risks: Vec::new(),
-            });
+            let risky_week = risky_weeks
+                .entry(week_string.clone())
+                .or_insert_with(|| RiskyWeek {
+                    week: week_string.clone(),
+                    risk_count: 0,
+                    risks: Vec::new(),
+                });
 
             risky_week.risk_count += 1;
             let risk_message = format!(
@@ -120,12 +119,12 @@ fn analyze_ssrd30_test(athlete_name: &str, activities: &[BullSharkActivity]) -> 
 #[test]
 fn test_ssrd30_no_risk_scenario() {
     let activities = vec![
-        create_test_activity("2024-01-01", "John Doe", 5.0),  // 5km baseline
-        create_test_activity("2024-01-15", "John Doe", 5.5),  // 5.5km - 10% increase, should be no risk
+        create_test_activity("2024-01-01", "John Doe", 5.0), // 5km baseline
+        create_test_activity("2024-01-15", "John Doe", 5.5), // 5.5km - 10% increase, should be no risk
     ];
 
     let risky_weeks = analyze_ssrd30_test("John Doe", &activities);
-    
+
     // Should have no risky weeks since 5.5km is only 10% increase from 5km (threshold)
     assert_eq!(risky_weeks.len(), 0);
 }
@@ -138,7 +137,7 @@ fn test_ssrd30_small_risk_scenario() {
     ];
 
     let risky_weeks = analyze_ssrd30_test("John Doe", &activities);
-    
+
     assert_eq!(risky_weeks.len(), 1);
     let risky_week = risky_weeks.values().next().unwrap();
     assert_eq!(risky_week.risk_count, 1);
@@ -155,7 +154,7 @@ fn test_ssrd30_moderate_risk_scenario() {
     ];
 
     let risky_weeks = analyze_ssrd30_test("John Doe", &activities);
-    
+
     assert_eq!(risky_weeks.len(), 1);
     let risky_week = risky_weeks.values().next().unwrap();
     assert!(risky_week.risks[0].contains("SSRD30_MODERATE_RISK"));
@@ -170,7 +169,7 @@ fn test_ssrd30_large_risk_scenario() {
     ];
 
     let risky_weeks = analyze_ssrd30_test("John Doe", &activities);
-    
+
     assert_eq!(risky_weeks.len(), 1);
     let risky_week = risky_weeks.values().next().unwrap();
     assert!(risky_week.risks[0].contains("SSRD30_LARGE_RISK"));
@@ -183,12 +182,12 @@ fn test_ssrd30_thirty_day_window() {
         create_test_activity("2024-01-01", "John Doe", 20.0), // 20km long run
         create_test_activity("2024-01-16", "John Doe", 10.0), // 10km medium run
         create_test_activity("2024-02-14", "John Doe", 15.0), // 15km run - exactly 29 days later
-        // This should compare against the 10km run (Jan 16), not the 20km run (Jan 1)
-        // because the 20km run is > 30 days ago (45 days)
+                                                              // This should compare against the 10km run (Jan 16), not the 20km run (Jan 1)
+                                                              // because the 20km run is > 30 days ago (45 days)
     ];
 
     let risky_weeks = analyze_ssrd30_test("John Doe", &activities);
-    
+
     // Should have risk because 15km vs 10km baseline (50% increase)
     assert_eq!(risky_weeks.len(), 1);
     let risky_week = risky_weeks.values().next().unwrap();
@@ -202,11 +201,11 @@ fn test_ten_percent_rule_calculation() {
     let prev_week_km = 20.0;
     let current_week_km = 25.0;
     let spike_threshold = prev_week_km * 1.10; // 22.0km
-    
+
     // Should trigger risk since 25.0 > 22.0 and 25.0 > 20.0 (min threshold)
     assert!(current_week_km > spike_threshold);
     assert!(current_week_km > 20.0);
-    
+
     // Calculate increase percentage
     let increase_percentage = (current_week_km / prev_week_km - 1.0) * 100.0;
     assert_eq!(increase_percentage, 25.0); // 25% increase
@@ -216,7 +215,8 @@ fn test_ten_percent_rule_calculation() {
 fn test_risk_type_classification() {
     // Test the SSRD30 risk classification logic
     assert_eq!(
-        match 0.05 { // 5% increase
+        match 0.05 {
+            // 5% increase
             x if x < 0.1 + f64::EPSILON => InjuryRiskType::SSRD30NoRisk,
             x if x <= 0.3 => InjuryRiskType::SSRD30SmallRisk,
             x if x <= 1.0 => InjuryRiskType::SSRD30ModerateRisk,
@@ -226,7 +226,8 @@ fn test_risk_type_classification() {
     );
 
     assert_eq!(
-        match 0.25 { // 25% increase
+        match 0.25 {
+            // 25% increase
             x if x < 0.1 + f64::EPSILON => InjuryRiskType::SSRD30NoRisk,
             x if x <= 0.3 => InjuryRiskType::SSRD30SmallRisk,
             x if x <= 1.0 => InjuryRiskType::SSRD30ModerateRisk,
@@ -236,7 +237,8 @@ fn test_risk_type_classification() {
     );
 
     assert_eq!(
-        match 0.8 { // 80% increase
+        match 0.8 {
+            // 80% increase
             x if x < 0.1 + f64::EPSILON => InjuryRiskType::SSRD30NoRisk,
             x if x <= 0.3 => InjuryRiskType::SSRD30SmallRisk,
             x if x <= 1.0 => InjuryRiskType::SSRD30ModerateRisk,
@@ -246,7 +248,8 @@ fn test_risk_type_classification() {
     );
 
     assert_eq!(
-        match 1.5 { // 150% increase
+        match 1.5 {
+            // 150% increase
             x if x < 0.1 + f64::EPSILON => InjuryRiskType::SSRD30NoRisk,
             x if x <= 0.3 => InjuryRiskType::SSRD30SmallRisk,
             x if x <= 1.0 => InjuryRiskType::SSRD30ModerateRisk,
@@ -259,8 +262,260 @@ fn test_risk_type_classification() {
 #[test]
 fn test_risk_type_string_conversion() {
     assert_eq!(InjuryRiskType::SSRD30NoRisk.as_str(), "SSRD30_NO_RISK");
-    assert_eq!(InjuryRiskType::SSRD30SmallRisk.as_str(), "SSRD30_SMALL_RISK");
-    assert_eq!(InjuryRiskType::SSRD30ModerateRisk.as_str(), "SSRD30_MODERATE_RISK");
-    assert_eq!(InjuryRiskType::SSRD30LargeRisk.as_str(), "SSRD30_LARGE_RISK");
-    assert_eq!(InjuryRiskType::HighVolumeSpike.as_str(), "HIGH_VOLUME_SPIKE");
+    assert_eq!(
+        InjuryRiskType::SSRD30SmallRisk.as_str(),
+        "SSRD30_SMALL_RISK"
+    );
+    assert_eq!(
+        InjuryRiskType::SSRD30ModerateRisk.as_str(),
+        "SSRD30_MODERATE_RISK"
+    );
+    assert_eq!(
+        InjuryRiskType::SSRD30LargeRisk.as_str(),
+        "SSRD30_LARGE_RISK"
+    );
+    assert_eq!(
+        InjuryRiskType::HighVolumeSpike.as_str(),
+        "HIGH_VOLUME_SPIKE"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Helper: mirrors analyze_ten_percent_rule() production logic so we can test
+// the algorithm's behaviour without needing a full ActivityController setup.
+// ---------------------------------------------------------------------------
+fn analyze_ten_percent_rule_test(
+    weekly_kilometers: &HashMap<String, f64>,
+) -> HashMap<String, RiskyWeek> {
+    use chrono::NaiveDate;
+
+    let mut weeks: Vec<(&String, &f64)> = weekly_kilometers.iter().collect();
+    weeks.sort_by_key(|(week_str, _)| {
+        NaiveDate::parse_from_str(week_str, "%Y-%m-%d").unwrap_or_default()
+    });
+
+    // Must match the production constants exactly
+    const MIN_WEEKLY_KM_THRESHOLD: f64 = 20.0;
+    const SPIKE_THRESHOLD_MULTIPLIER: f64 = 1.10;
+
+    let mut risky_weeks: HashMap<String, RiskyWeek> = HashMap::new();
+
+    for window in weeks.windows(2) {
+        let (_prev_week, prev_km) = window[0];
+        let (current_week, current_km) = window[1];
+
+        let spike_threshold = prev_km * SPIKE_THRESHOLD_MULTIPLIER;
+
+        if *current_km > spike_threshold && *current_km > MIN_WEEKLY_KM_THRESHOLD {
+            let risky_week = risky_weeks
+                .entry(current_week.clone())
+                .or_insert_with(|| RiskyWeek {
+                    week: current_week.clone(),
+                    risk_count: 0,
+                    risks: Vec::new(),
+                });
+
+            risky_week.risk_count += 1;
+            let increase_percentage = (current_km / prev_km - 1.0) * 100.0;
+            let risk_message = format!(
+                "{}: Weekly volume increased from {:.1}km to {:.1}km ({:.1}% increase exceeds 10% rule)",
+                InjuryRiskType::HighVolumeSpike,
+                prev_km,
+                current_km,
+                increase_percentage
+            );
+            risky_week.risks.push(risk_message);
+        }
+    }
+
+    risky_weeks
+}
+
+// ---------------------------------------------------------------------------
+// SSRD30 edge-case tests
+// ---------------------------------------------------------------------------
+
+/// A single run with no prior history must never be flagged.
+/// The algorithm requires at least one earlier run inside the 30-day window
+/// before it can compute a growth ratio.
+#[test]
+fn test_ssrd30_first_run_no_baseline() {
+    let activities = vec![create_test_activity("2024-01-01", "John Doe", 25.0)];
+
+    let risky_weeks = analyze_ssrd30_test("John Doe", &activities);
+
+    assert_eq!(
+        risky_weeks.len(),
+        0,
+        "First run with no baseline should produce zero risky weeks"
+    );
+}
+
+/// When the only prior run is more than 30 days ago, there is no valid
+/// baseline inside the lookback window.  The algorithm sets max_distance_30d
+/// to 0 and skips the activity — even if it would be a large jump.
+#[test]
+fn test_ssrd30_only_prior_run_outside_thirty_day_window() {
+    let activities = vec![
+        create_test_activity("2024-01-01", "John Doe", 30.0), // 30 km — will be > 30 days old
+        // Feb 15 is 45 days after Jan 1: Jan 1 falls outside the [Jan 16 … Feb 15] window
+        create_test_activity("2024-02-15", "John Doe", 20.0),
+    ];
+
+    let risky_weeks = analyze_ssrd30_test("John Doe", &activities);
+
+    assert_eq!(
+        risky_weeks.len(),
+        0,
+        "No baseline in the 30-day window should produce zero risky weeks"
+    );
+}
+
+/// Activities from different athletes must not contaminate each other's risk
+/// analysis.  Alice's large jump should appear only in Alice's results.
+#[test]
+fn test_ssrd30_multiple_athletes_isolated() {
+    let activities = vec![
+        create_test_activity("2024-01-01", "Alice Smith", 10.0),
+        create_test_activity("2024-01-15", "Alice Smith", 25.0), // +150% → large risk
+        create_test_activity("2024-01-01", "Bob Jones", 30.0),
+        create_test_activity("2024-01-15", "Bob Jones", 31.0), // +3%  → no risk
+    ];
+
+    let alice_risky = analyze_ssrd30_test("Alice Smith", &activities);
+    let bob_risky = analyze_ssrd30_test("Bob Jones", &activities);
+
+    assert_eq!(alice_risky.len(), 1, "Alice should have 1 risky week");
+    let alice_week = alice_risky.values().next().unwrap();
+    assert!(alice_week.risks[0].contains("SSRD30_LARGE_RISK"));
+    assert!(alice_week.risks[0].contains("150.0%"));
+
+    assert_eq!(
+        bob_risky.len(),
+        0,
+        "Bob's conservative training should have no risky weeks"
+    );
+}
+
+/// Only activities with sport_type == "Run" should feed the SSRD30 baseline.
+/// A cycling ride must not serve as a baseline for a subsequent run.
+#[test]
+fn test_ssrd30_non_run_activities_excluded_from_baseline() {
+    let mut cycling = create_test_activity("2024-01-01", "John Doe", 50.0);
+    cycling.sport_type = Some("Ride".to_string()); // Not a run
+
+    let activities = vec![
+        cycling,                                              // Ignored by filter
+        create_test_activity("2024-01-15", "John Doe", 20.0), // Run, but no running baseline
+    ];
+
+    let risky_weeks = analyze_ssrd30_test("John Doe", &activities);
+
+    assert_eq!(
+        risky_weeks.len(),
+        0,
+        "Non-Run activities must be excluded from the SSRD30 baseline"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 10% Rule edge-case tests
+// ---------------------------------------------------------------------------
+
+/// With only one week of data there is no prior week to compare against.
+/// weeks.windows(2) produces an empty iterator, so no risks are raised.
+#[test]
+fn test_ten_percent_rule_single_week_no_comparison() {
+    let mut weekly_km: HashMap<String, f64> = HashMap::new();
+    weekly_km.insert("2024-01-01".to_string(), 50.0);
+
+    let risky_weeks = analyze_ten_percent_rule_test(&weekly_km);
+
+    assert_eq!(
+        risky_weeks.len(),
+        0,
+        "Single week with no prior comparison should produce zero risky weeks"
+    );
+}
+
+/// A volume increase of any size should NOT trigger when the current week's
+/// total is below the 20 km minimum threshold.  This protects beginners whose
+/// small weekly volumes look like large percentage increases.
+#[test]
+fn test_ten_percent_rule_below_minimum_km_threshold() {
+    let mut weekly_km: HashMap<String, f64> = HashMap::new();
+    weekly_km.insert("2024-01-01".to_string(), 5.0); // 5 km
+    weekly_km.insert("2024-01-08".to_string(), 15.0); // 200% increase, but < 20 km
+
+    let risky_weeks = analyze_ten_percent_rule_test(&weekly_km);
+
+    assert_eq!(
+        risky_weeks.len(),
+        0,
+        "Volume below 20 km threshold must not trigger the 10% rule regardless of % increase"
+    );
+}
+
+/// A ~9% increase (just below the 10% threshold) above the 20 km minimum
+/// must NOT trigger a risk flag.
+#[test]
+fn test_ten_percent_rule_within_threshold_no_risk() {
+    let mut weekly_km: HashMap<String, f64> = HashMap::new();
+    weekly_km.insert("2024-01-01".to_string(), 30.0); // 30 km
+    weekly_km.insert("2024-01-08".to_string(), 32.7); // ~9% increase
+
+    let risky_weeks = analyze_ten_percent_rule_test(&weekly_km);
+
+    assert_eq!(
+        risky_weeks.len(),
+        0,
+        "A ~9% increase should not trigger the 10% rule"
+    );
+}
+
+/// A 40% increase above the 20 km minimum MUST trigger a HIGH_VOLUME_SPIKE risk.
+/// Verifies the happy-path detection, risk count, and message content.
+#[test]
+fn test_ten_percent_rule_triggers_above_threshold() {
+    let mut weekly_km: HashMap<String, f64> = HashMap::new();
+    weekly_km.insert("2024-01-01".to_string(), 25.0); // 25 km
+    weekly_km.insert("2024-01-08".to_string(), 35.0); // 40% increase, above 20 km
+
+    let risky_weeks = analyze_ten_percent_rule_test(&weekly_km);
+
+    assert_eq!(
+        risky_weeks.len(),
+        1,
+        "40% spike above 20 km should trigger the 10% rule"
+    );
+    let risky_week = risky_weeks.values().next().unwrap();
+    assert_eq!(risky_week.risk_count, 1);
+    assert!(risky_week.risks[0].contains("HIGH_VOLUME_SPIKE"));
+    assert!(risky_week.risks[0].contains("40.0%"));
+    assert!(risky_week.risks[0].contains("25.0km")); // previous week
+    assert!(risky_week.risks[0].contains("35.0km")); // current week
+}
+
+/// In a three-week sequence, only the week that exceeds the threshold should
+/// be flagged.  A subsequent decrease must not produce a false positive.
+#[test]
+fn test_ten_percent_rule_only_spike_week_flagged() {
+    let mut weekly_km: HashMap<String, f64> = HashMap::new();
+    weekly_km.insert("2024-01-01".to_string(), 20.0); // Week 1 baseline
+    weekly_km.insert("2024-01-08".to_string(), 30.0); // Week 2: +50%  → spike
+    weekly_km.insert("2024-01-15".to_string(), 28.0); // Week 3: −6.7% → no risk
+
+    let risky_weeks = analyze_ten_percent_rule_test(&weekly_km);
+
+    assert_eq!(
+        risky_weeks.len(),
+        1,
+        "Only the spike week should be flagged"
+    );
+    let risky_week = risky_weeks.values().next().unwrap();
+    assert_eq!(
+        risky_week.week, "2024-01-08",
+        "The spike week should be Jan 8"
+    );
+    assert!(risky_week.risks[0].contains("50.0%"));
 }
