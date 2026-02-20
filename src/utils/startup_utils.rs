@@ -1,44 +1,63 @@
 use std::sync::Arc;
 
-use axum::{Router, routing::{get, post}, extract::FromRef};
-use sqlx::{PgPool};
+use axum::{
+    Router,
+    extract::FromRef,
+    routing::{get, post},
+};
+use sqlx::PgPool;
 
-use crate::{api::{activities::{get_activities_from_custom_window, get_activities_from_this_month, get_activities_from_this_week, get_team_stats, populate_activities, read_activities}, athletes::{get_athletes, get_athletes_training_data}, health::health_check}, services::{activity_controller::ActivityController, auth_controller::{AuthController, StravaConfig}, database::Database, strava_client::StravaClient}};
+use crate::{
+    api::{
+        activities::{
+            get_activities_from_custom_window, get_activities_from_this_month,
+            get_activities_from_this_week, get_team_stats, populate_activities, read_activities,
+        },
+        athletes::{get_athletes, get_athletes_training_data},
+        health::health_check,
+    },
+    services::{
+        activity_controller::ActivityController,
+        auth_controller::{AuthController, StravaConfig},
+        database::Database,
+        strava_client::StravaClient,
+    },
+};
 
 pub fn get_strava_config() -> StravaConfig {
-    return StravaConfig::from_env()
-        .expect("Failed to find environment variables.");
+    StravaConfig::from_env().expect("Failed to find environment variables.")
 }
 
 pub fn get_auth_controller(strava_config: StravaConfig, db: Arc<Database>) -> AuthController {
-    return AuthController::new(strava_config, db)
+    AuthController::new(strava_config, db)
 }
 
 pub fn get_strava_client(auth_controller: AuthController) -> StravaClient {
-    return StravaClient::new(auth_controller)
+    StravaClient::new(auth_controller)
 }
 
-pub fn get_activity_controller(db: Arc<Database>, strava_client: StravaClient) -> ActivityController {
+pub fn get_activity_controller(
+    db: Arc<Database>,
+    strava_client: StravaClient,
+) -> ActivityController {
     ActivityController::new(db, strava_client)
 }
 
 pub async fn get_db() -> Arc<Database> {
-    let pool = get_pg_pool().await
+    let pool = get_pg_pool()
+        .await
         .expect("Error: could not create the database connection pool");
 
-    let db = Arc::new(Database::new(pool));
-
-    return db;
+    Arc::new(Database::new(pool))
 }
 
 async fn get_pg_pool() -> Result<PgPool, sqlx::Error> {
-    let database_url = std::env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set in .env");
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
 
     println!("Connecting to database...");
     let pool = PgPool::connect(&database_url).await?;
     println!("Database connected!");
-    
+
     Ok(pool)
 }
 
