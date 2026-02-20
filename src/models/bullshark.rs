@@ -17,5 +17,5 @@ pub struct BullSharkActivity {
     pub total_elevation_gain: Option<f64>,
     pub sport_type: Option<String>,
     pub workout_type: Option<i64>,
-    pub device_name: Option<String>
+    pub device_name: Option<String>,
 }

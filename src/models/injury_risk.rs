@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum InjuryRiskType {
     /// High volume spike detected (e.g., >10% increase week-over-week)
@@ -13,11 +12,9 @@ pub enum InjuryRiskType {
     #[serde(rename = "SSRD30_SMALL_RISK")]
     SSRD30SmallRisk,
 
-
     #[serde(rename = "SSRD30_MODERATE_RISK")]
     SSRD30ModerateRisk,
 
-    
     #[serde(rename = "SSRD30_LARGE_RISK")]
     SSRD30LargeRisk,
 }

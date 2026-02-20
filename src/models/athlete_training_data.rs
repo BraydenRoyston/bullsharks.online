@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Metadata for a week with detected injury risks
 #[derive(Serialize, Deserialize, Debug)]
