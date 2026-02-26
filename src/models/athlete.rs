@@ -5,5 +5,5 @@ pub struct Athlete {
     pub id: String,
     pub name: String,
     pub team: String,
-    pub event: String
-} 
+    pub event: String,
+}
